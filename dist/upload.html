@@ -1,0 +1,56 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<html lang="en">
+<head>
+    <meta http-equiv="content-type" content="text/html; charset=utf-8">
+    <title>File Upload</title>
+    <link href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-BVYiiSIFeK1dGmJRAkycuHAHRg32OmUcww7on3RYdg4Va+PmSTsz/K68vbdEjh4u" crossorigin="anonymous">
+</head>
+<body>
+<div class="col-lg-8">
+<div class="row">
+  <div class="col-lg-6">
+    <div class="input-group">
+      <input type="file" id="file" class="form-control" placeholder="Search for...">
+      <span class="input-group-btn">
+        <button id="upload" class="btn btn-default disabled" type="button">Upload</button>
+      </span>
+    </div><!-- /input-group -->
+
+    <div class="progress">
+        <div class="progress-bar" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100" style="width: 0%;">
+            <span class="sr-only">60% Complete</span>
+        </div>
+    </div>
+
+  </div><!-- /.col-lg-6 -->
+</div>
+
+    <script src="./sha256.min.js"></script>
+    <script src="./upload.js"></script>
+    <script
+        src="https://code.jquery.com/jquery-3.2.1.min.js"
+        integrity="sha256-hwg4gsxgFZhOsEEamdOYGBf13FyQuiTwlAQgxVSNgt4="
+        crossorigin="anonymous"></script>
+</div>
+<script>
+$('#file').on('change', function(evt) {
+    var files = evt.target.files; // FileList object
+
+    // files is a FileList of File objects. List some properties.
+    var uploader = [];
+    for (var i = 0, file; file = files[i]; i++) {
+        uploader.push(new FileUploader.Upload(file, "./upload.php", sha256));
+    }
+
+    $('#upload').removeClass('disabled').unbind('click').bind('click', function() {
+        uploader[0].upload();
+        uploader[0].on('progress', function(size, done) {
+            $('.progress-bar').css('width', (done/size * 100) + '%')
+                .attr('aria-valuenow', done/size*100)
+        });
+    });
+
+});
+</script>
+</body>
+</html>
