@@ -1,0 +1,17 @@
+{
+    "name": "crodas/ez-upload",
+    "description": "A better uploader for the modern browser (Javascript / PHP)",
+    "autoload": {
+        "psr-0": {
+            "EzUpload": "server/"
+        }
+    },
+    "authors": [
+        {
+            "name": "Cesar Rodas",
+            "email": "cesar@rodas.me"
+        }
+    ],
+    "minimum-stability": "stable",
+    "require": {}
+}
