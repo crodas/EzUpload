@@ -1,12 +1,14 @@
 import XHR from 'xhr-promise'
 import FileSlice from './file'
+import Event from 'tiny-emitter';
 import {array, build_http_query} from './utils'
 
 const WAITING = -1;
 const BUSY = -2;
 
-export class Upload {
+export class Upload extends Event {
     constructor(file, url, hash = window.sha256) {
+        super();
         if (typeof hash !== "function") {
             throw new Error("The hash is not a valid function");
         }
@@ -14,11 +16,12 @@ export class Upload {
         this.hash = hash;
         this.url  = url;
         this.chunk_size = 4 * 1024 * 1024;
+        this.file_size  = file.size;
+        this.progress   = 0;
         this.queue      = Array(4).fill(WAITING)
-        this._prepare_upload();
     }
 
-    _prepare_upload() {
+    upload() {
         let xhr = new XHR();
         xhr.send({ 
             method: 'POST',
@@ -51,7 +54,7 @@ export class Upload {
 
     _begin_upload() {
         this.chunks = Array(Math.ceil(this.file.size / this.chunk_size)).fill(WAITING)
-        this.do_upload();
+        this._do_upload();
     }
 
     _get_empty_slot() {
@@ -64,7 +67,7 @@ export class Upload {
         return false;
     }
 
-    do_upload() {
+    _do_upload() {
         for (let i = 0; i < this.queue.length; ++i) {
             if (this.queue[i] === WAITING) {
                 let slice = this._get_empty_slot();
@@ -87,6 +90,7 @@ export class Upload {
         }
         reader.onloadend = evt => {
             let target = evt.target;
+            let size   = target.result.byteLength;
             if (target.readyState === FileReader.DONE) {
                 let xhr = new XHR;
                 xhr.send({
@@ -107,10 +111,11 @@ export class Upload {
                     if (result.status !== 200 || !response || !response.success) {
                         throw new Error('internal error');
                     }
+                    this.progress += size;
+                    this.emit('progress', this.file_size, this.progress);
                     this.queue[id] = WAITING;
-                    this.do_upload()
+                    this._do_upload()
                 }).catch(r => {
-                    debugger;
                     this._upload_chunk(id, ++retries)
                 });
             }
