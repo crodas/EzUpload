@@ -3,7 +3,7 @@
     "description": "A better uploader for the modern browser (Javascript / PHP)",
     "autoload": {
         "psr-0": {
-            "EzUpload": "server/"
+            "EzUpload": "src/"
         }
     },
     "authors": [

@@ -62,11 +62,11 @@ var FileUploader =
 
 	var _file2 = _interopRequireDefault(_file);
 
-	var _tinyEmitter = __webpack_require__(15);
+	var _tinyEmitter = __webpack_require__(14);
 
 	var _tinyEmitter2 = _interopRequireDefault(_tinyEmitter);
 
-	var _utils = __webpack_require__(14);
+	var _utils = __webpack_require__(15);
 
 	function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
 
@@ -166,7 +166,6 @@ var FileUploader =
 	                    this._upload_chunk(slice);
 	                }
 	            }
-	            window.lol = this;
 	        }
 	    }, {
 	        key: '_upload_chunk',
@@ -1171,32 +1170,6 @@ var FileUploader =
 /* 14 */
 /***/ (function(module, exports) {
 
-	"use strict";
-
-	Object.defineProperty(exports, "__esModule", {
-	    value: true
-	});
-	exports.build_http_query = build_http_query;
-	/**
-	 * Converts an array to an URL
-	 */
-	function build_http_query(obj) {
-	    var str = "";
-	    for (var key in obj) {
-	        if (obj.hasOwnProperty(key)) {
-	            if (str != "") {
-	                str += "&";
-	            }
-	            str += key + "=" + encodeURIComponent(obj[key]);
-	        }
-	    }
-	    return str;
-	}
-
-/***/ }),
-/* 15 */
-/***/ (function(module, exports) {
-
 	function E () {
 	  // Keep this empty so it's easier to inherit from
 	  // (via https://github.com/lipsmack from https://github.com/scottcorgan/tiny-emitter/issues/3)
@@ -1264,6 +1237,32 @@ var FileUploader =
 
 	module.exports = E;
 
+
+/***/ }),
+/* 15 */
+/***/ (function(module, exports) {
+
+	"use strict";
+
+	Object.defineProperty(exports, "__esModule", {
+	    value: true
+	});
+	exports.build_http_query = build_http_query;
+	/**
+	 * Converts an array to an URL
+	 */
+	function build_http_query(obj) {
+	    var str = "";
+	    for (var key in obj) {
+	        if (obj.hasOwnProperty(key)) {
+	            if (str != "") {
+	                str += "&";
+	            }
+	            str += key + "=" + encodeURIComponent(obj[key]);
+	        }
+	    }
+	    return str;
+	}
 
 /***/ })
 /******/ ]);

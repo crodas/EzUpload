@@ -78,7 +78,6 @@ export class Upload extends Event {
                 this._upload_chunk(slice);
             }
         }
-        window.lol = this;
     }
 
     _upload_chunk(id, retries = 0) {
