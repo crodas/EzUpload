@@ -58,10 +58,6 @@ var FileUploader =
 
 	var _xhrPromise2 = _interopRequireDefault(_xhrPromise);
 
-	var _file = __webpack_require__(13);
-
-	var _file2 = _interopRequireDefault(_file);
-
 	var _tinyEmitter = __webpack_require__(14);
 
 	var _tinyEmitter2 = _interopRequireDefault(_tinyEmitter);
@@ -1170,28 +1166,7 @@ var FileUploader =
 
 
 /***/ }),
-/* 13 */
-/***/ (function(module, exports) {
-
-	"use strict";
-
-	Object.defineProperty(exports, "__esModule", {
-	    value: true
-	});
-
-	function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
-
-	var Chunk = function Chunk(file, offset, length) {
-	    _classCallCheck(this, Chunk);
-	};
-
-	var FileSlice = function FileSlice(file, block_size) {
-	    _classCallCheck(this, FileSlice);
-	};
-
-	exports.default = FileSlice;
-
-/***/ }),
+/* 13 */,
 /* 14 */
 /***/ (function(module, exports) {
 

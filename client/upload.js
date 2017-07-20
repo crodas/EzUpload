@@ -1,5 +1,4 @@
 import XHR from 'xhr-promise'
-import FileSlice from './file'
 import Event from 'tiny-emitter';
 import {array, build_http_query} from './utils'
 
