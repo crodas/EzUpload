@@ -5,7 +5,6 @@ import {array, build_http_query} from './utils'
 
 const WAITING = -1;
 const BUSY = -2;
-const DONE = -3;
 
 export class Upload extends Event {
     constructor(file, url, hash = window.sha256) {
@@ -19,41 +18,21 @@ export class Upload extends Event {
         this.chunk_size = 4 * 1024 * 1024;
         this.file_size  = file.size;
         this.progress   = 0;
-    }
-
-    _do_post(data) {
-        let xhr = new XHR();
-        let headers = {};
-        if (this.file_id) {
-            headers['X-File-Id'] = this.file_id;
-        }
-        return xhr.send({ 
-            headers,
-            method: 'POST',
-            url: this.url,
-            data: build_http_query(data)
-        });
-    }
-
-    _check_upload_finished() {
-        for (let i = 0; i < this.chunks.length; ++i) {
-            if (this.chunks[i] !== DONE) {
-                return;
-            }
-        }
-
-        this._do_post({
-            'action': 'finish',
-        });
+        this.queue      = Array(4).fill(WAITING)
     }
 
     upload() {
-        this._do_post({
-            name: this.file.name,
-            type: this.file.type,
-            size: this.file.size,
-            lastModified: this.file.lastModified,
-            action: 'begin-upload',
+        let xhr = new XHR();
+        xhr.send({ 
+            method: 'POST',
+            url: this.url,
+            data: build_http_query({
+                name: this.file.name,
+                type: this.file.type,
+                size: this.file.size,
+                lastModified: this.file.lastModified,
+                begin_upload: true,
+            }),
         }).then(results => {
             if (results.status !== 200) {
                 throw new Error('request failed');
@@ -79,25 +58,24 @@ export class Upload extends Event {
     }
 
     _get_empty_slot() {
-    }
-
-    _how_many_busy() {
-        let busy = 0;
-        for (let i=0; i < this.chunks.length && busy < 5; ++i) {
-            if (this.chunks[i] === BUSY) {
-                ++busy;
+        for (let i=0; i < this.chunks.length; ++i) {
+            if (this.chunks[i] === WAITING) {
+                return i;
             }
         }
-        return busy;
+
+        return false;
     }
 
     _do_upload() {
-        let busy = this._how_many_busy();
-        for (let i=0; i < this.chunks.length && busy < 5; ++i) {
-            if (this.chunks[i] === WAITING) {
-                console.error([i, busy]);
-                this._upload_chunk(i);
-                ++busy;
+        for (let i = 0; i < this.queue.length; ++i) {
+            if (this.queue[i] === WAITING) {
+                let slice = this._get_empty_slot();
+                if (slice === false) {
+                    break;
+                }
+                this.queue[i] = slice;
+                this._upload_chunk(slice);
             }
         }
     }
@@ -121,7 +99,7 @@ export class Upload extends Event {
                         'Content-Type': 'application/binary',
                         'X-HASH':  this.hash.apply(null, [target.result]),
                         'X-File-Id': this.file_id,
-                        'X-Offset': offset,
+                        'X-Offset': id,
                     },
                     data: new Uint8Array(target.result),
                 }).then(result => {
@@ -134,9 +112,8 @@ export class Upload extends Event {
                     }
                     this.progress += size;
                     this.emit('progress', this.file_size, this.progress);
-                    this.chunks[id] = DONE;
+                    this.queue[id] = WAITING;
                     this._do_upload()
-                    this._check_upload_finished();
                 }).catch(r => {
                     this._upload_chunk(id, ++retries)
                 });

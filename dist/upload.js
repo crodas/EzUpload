@@ -78,6 +78,7 @@ var FileUploader =
 
 	var WAITING = -1;
 	var BUSY = -2;
+	var DONE = -3;
 
 	var Upload = exports.Upload = function (_Event) {
 	    _inherits(Upload, _Event);
@@ -98,26 +99,48 @@ var FileUploader =
 	        _this.chunk_size = 4 * 1024 * 1024;
 	        _this.file_size = file.size;
 	        _this.progress = 0;
-	        _this.queue = Array(4).fill(WAITING);
 	        return _this;
 	    }
 
 	    _createClass(Upload, [{
+	        key: '_do_post',
+	        value: function _do_post(data) {
+	            var xhr = new _xhrPromise2.default();
+	            var headers = {};
+	            if (this.file_id) {
+	                headers['X-File-Id'] = this.file_id;
+	            }
+	            return xhr.send({
+	                headers: headers,
+	                method: 'POST',
+	                url: this.url,
+	                data: (0, _utils.build_http_query)(data)
+	            });
+	        }
+	    }, {
+	        key: '_check_upload_finished',
+	        value: function _check_upload_finished() {
+	            for (var i = 0; i < this.chunks.length; ++i) {
+	                if (this.chunks[i] !== DONE) {
+	                    return;
+	                }
+	            }
+
+	            this._do_post({
+	                'action': 'finish'
+	            });
+	        }
+	    }, {
 	        key: 'upload',
 	        value: function upload() {
 	            var _this2 = this;
 
-	            var xhr = new _xhrPromise2.default();
-	            xhr.send({
-	                method: 'POST',
-	                url: this.url,
-	                data: (0, _utils.build_http_query)({
-	                    name: this.file.name,
-	                    type: this.file.type,
-	                    size: this.file.size,
-	                    lastModified: this.file.lastModified,
-	                    begin_upload: true
-	                })
+	            this._do_post({
+	                name: this.file.name,
+	                type: this.file.type,
+	                size: this.file.size,
+	                lastModified: this.file.lastModified,
+	                action: 'begin-upload'
 	            }).then(function (results) {
 	                if (results.status !== 200) {
 	                    throw new Error('request failed');
@@ -144,26 +167,27 @@ var FileUploader =
 	        }
 	    }, {
 	        key: '_get_empty_slot',
-	        value: function _get_empty_slot() {
-	            for (var i = 0; i < this.chunks.length; ++i) {
-	                if (this.chunks[i] === WAITING) {
-	                    return i;
+	        value: function _get_empty_slot() {}
+	    }, {
+	        key: '_how_many_busy',
+	        value: function _how_many_busy() {
+	            var busy = 0;
+	            for (var i = 0; i < this.chunks.length && busy < 5; ++i) {
+	                if (this.chunks[i] === BUSY) {
+	                    ++busy;
 	                }
 	            }
-
-	            return false;
+	            return busy;
 	        }
 	    }, {
 	        key: '_do_upload',
 	        value: function _do_upload() {
-	            for (var i = 0; i < this.queue.length; ++i) {
-	                if (this.queue[i] === WAITING) {
-	                    var slice = this._get_empty_slot();
-	                    if (slice === false) {
-	                        break;
-	                    }
-	                    this.queue[i] = slice;
-	                    this._upload_chunk(slice);
+	            var busy = this._how_many_busy();
+	            for (var i = 0; i < this.chunks.length && busy < 5; ++i) {
+	                if (this.chunks[i] === WAITING) {
+	                    console.error([i, busy]);
+	                    this._upload_chunk(i);
+	                    ++busy;
 	                }
 	            }
 	        }
@@ -192,7 +216,7 @@ var FileUploader =
 	                            'Content-Type': 'application/binary',
 	                            'X-HASH': _this3.hash.apply(null, [target.result]),
 	                            'X-File-Id': _this3.file_id,
-	                            'X-Offset': id
+	                            'X-Offset': offset
 	                        },
 	                        data: new Uint8Array(target.result)
 	                    }).then(function (result) {
@@ -205,8 +229,9 @@ var FileUploader =
 	                        }
 	                        _this3.progress += size;
 	                        _this3.emit('progress', _this3.file_size, _this3.progress);
-	                        _this3.queue[id] = WAITING;
+	                        _this3.chunks[id] = DONE;
 	                        _this3._do_upload();
+	                        _this3._check_upload_finished();
 	                    }).catch(function (r) {
 	                        _this3._upload_chunk(id, ++retries);
 	                    });
