@@ -197,6 +197,8 @@ export class Upload extends Event {
                     this._do_upload();
                 }).catch(r => {
                     chunk.status = WAITING
+                    chunk.uploaded = 0;
+                    this.progress();
                     this._do_upload();
                 });
                 xhr.upload.onprogress = e => {

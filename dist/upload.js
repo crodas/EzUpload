@@ -298,6 +298,8 @@ var FileUploader =
 	                        _this4._do_upload();
 	                    }).catch(function (r) {
 	                        chunk.status = WAITING;
+	                        chunk.uploaded = 0;
+	                        _this4.progress();
 	                        _this4._do_upload();
 	                    });
 	                    xhr.upload.onprogress = function (e) {
