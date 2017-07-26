@@ -14,6 +14,6 @@
     ],
     "minimum-stability": "stable",
     "require": {
-        "crodas/concurrent-file-writer": ">=0.1.1"
+        "crodas/concurrent-file-writer": ">=0.2.2"
     }
 }

@@ -11,7 +11,7 @@ class Configuration implements ConfigurationInterface
 
     public function __construct($target)
     {
-        if (!is_dir($target)) {
+        if (!is_dir($target) && !mkdir($target)) {
             throw new RuntimeException("$target is not a valid directory");
         }
         if (!is_writable($target)) {
@@ -30,6 +30,11 @@ class Configuration implements ConfigurationInterface
     public function getTemporaryDirectory()
     {
         return $this->temporary;
+    }
+
+    public function generateUploadId()
+    {
+        return uniqid(true);
     }
 
     public function shouldProcess($id, array $metadata)

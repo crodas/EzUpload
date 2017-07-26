@@ -70,7 +70,10 @@ class Server
     {
         $this->requireData('HTTP_X_FILE_ID');
         $tmp = $this->config->getTemporaryDirectory();
-        $writer = new ConcurrentFileWriter($tmp . '/' . basename($_SERVER['HTTP_X_FILE_ID']));
+        $writer = new ConcurrentFileWriter(
+            $this->config->getUploadDirectory() . '/' . basename($_SERVER['HTTP_X_FILE_ID']),
+            $this->config->getTemporaryDirectory()
+        );
         $this->send_response(['finished' => $writer->finalize()]);
     }
 
@@ -80,18 +83,21 @@ class Server
             $this->error('Invalid file size');
         }
 
-        $id   = uniqid(true);
+        $id   = $this->config->generateUploadId();
         $meta = array_intersect_key($_POST, ['name' => 1, 'type' => 1, 'size' => 1, 'lastModified' => 1]); 
 
         if (!$this->config->shouldProcess($id, $meta)) {
             throw new RuntimeException("cannot process upload");
         }
 
-        $tmp = $this->config->getTemporaryDirectory();
-        $writer = new ConcurrentFileWriter( $tmp . '/' . $id );
+        $writer = new ConcurrentFileWriter(
+            $this->config->getUploadDirectory() . '/' . $id,
+            $this->config->getTemporaryDirectory()
+        );
         $writer->create();
         $this->send_response([
             'file_id' => $id,
+            'min_chunk_size' => min($this->chunkSize() / 2, 1024 * 1024),
             'chunk_limit' => $this->chunkSize(),
         ]);
     }
@@ -100,7 +106,7 @@ class Server
     {
         foreach ((array)$fields as $key) {
             if (!array_key_exists($key, $_SERVER)) {
-                $this->error('Invalid arguments');
+                $this->error('Invalid arguments (' . $key . ')');
             }
         }
     }
@@ -110,7 +116,10 @@ class Server
         $this->requireData(['HTTP_X_HASH', 'HTTP_X_OFFSET', 'HTTP_X_FILE_ID']);
 
         $tmp = $this->config->getTemporaryDirectory();
-        $writer = new ConcurrentFileWriter($tmp . '/' . basename($_SERVER['HTTP_X_FILE_ID']));
+        $writer = new ConcurrentFileWriter(
+            $this->config->getUploadDirectory() . '/' . basename($_SERVER['HTTP_X_FILE_ID']),
+            $this->config->getTemporaryDirectory()
+        );
 
         $hash   = $_SERVER['HTTP_X_HASH'];
         $offset = $_SERVER['HTTP_X_OFFSET'];
@@ -118,16 +127,20 @@ class Server
             $this->error('Invalid offset');
         }
 
+        $offset = (int)$offset;
+
         $fp = fopen('php://input', 'r');
         $chunk = $writer->write($offset, $fp);
         fclose($fp);
+
+        $end = $offset + filesize($chunk->getFileName());
 
         if (hash_file('sha256', $chunk->getFileName()) !== $hash) {
             unlink($chunk->getFileName());
             $this->error('Invalid hash');
         }
 
-        $this->send_response([]);
+        $this->send_response(compact('hash', 'offset', 'end'));
     }
 
     public function main()
