@@ -47,22 +47,30 @@ export class Upload extends Event {
             reader.onloadend = evt => {
                 let target = evt.target;
                 if (target.readyState === FileReader.DONE) {
-                    block.blob = target.result;
-                    block.real_size = block.blob.byteLength;
-                    if (block.id === 0) {
-                        block.real_offset = 0;
-                    } else {
-                        let prevBlock = this.blocks[block.id-1];
-                        block.real_offset = prevBlock.real_size + prevBlock.real_offset;
-                    }
+                    this.transform_block(block.offset, target.result, (err, bytes) {
+                        if (err) bytes = target.result;
+                        block.blob = bytes;
+                        block.real_size = block.blob.byteLength;
+                        if (block.id === 0) {
+                            block.real_offset = 0;
+                        } else {
+                            let prevBlock = this.blocks[block.id-1];
+                            block.real_offset = prevBlock.real_size + prevBlock.real_offset;
+                        }
 
-                    this._upload_block(socket, block);
-                    next();
+                        this._upload_block(socket, block);
+                        next();
+                    });
                 }
             };
             reader.readAsArrayBuffer(this.file.slice(block.offset, block.end))
         }, 1);
 
+    }
+
+    // Last change to transform a block before uploading
+    transform_block(offset, bytes, next) {
+        next(null, bytes);
     }
 
     _xhr(action, headers = {}) {
