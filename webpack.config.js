@@ -2,7 +2,7 @@ var path = require('path');
 var webpack = require('webpack');
 
 var config = {
-     entry: './src/upload',
+     entry: './client/upload',
      output: {
          path: __dirname,
          filename: 'dist/upload.js',

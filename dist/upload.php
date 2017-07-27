@@ -2,9 +2,8 @@
 
 require __DIR__ . '/../vendor/autoload.php';
 
-use EzUpload\Metadata\File;
-use EzUpload\Handler;
-use EzUpload\Writer;
+use EzUpload\Server;
+use EzUpload\Configuration;
 
-$server = new Handler(new Writer('/tmp/dir'), File::class);
+$server = new Server(new Configuration('/tmp/foobar'));
 $server->main();
