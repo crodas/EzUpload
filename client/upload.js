@@ -36,8 +36,33 @@ export class Upload extends Event {
         this.sockets = Array(4).fill(1).map(m => { return {status: WAITING, block: 0, id: id++} });
 
         this.file_reader = new Queue((args, next) => {
-            let {socket, queue} = args;
+            let {socket, block} = args;
+            
+            if (block.blob) {
+                this._upload_block(socket, block);
+                return next();
+            }
+
+            let reader = new FileReader;
+            reader.onloadend = evt => {
+                let target = evt.target;
+                if (target.readyState === FileReader.DONE) {
+                    block.blob = target.result;
+                    block.real_size = block.blob.byteLength;
+                    if (block.id === 0) {
+                        block.real_offset = 0;
+                    } else {
+                        let prevBlock = this.blocks[block.id-1];
+                        block.real_offset = prevBlock.real_size + prevBlock.real_offset;
+                    }
+
+                    this._upload_block(socket, block);
+                    next();
+                }
+            };
+            reader.readAsArrayBuffer(this.file.slice(block.offset, block.end))
         }, 1);
+
     }
 
     _xhr(action, headers = {}) {
@@ -158,7 +183,10 @@ export class Upload extends Event {
             let h = 0;
             for (let i=0; i < this.blocks.length; ++i) {
                 if (this.blocks[i].status === WAITING) {
-                    this._read_block(socket, this.blocks[i]);
+                    socket.status = BUSY;
+                    this.blocks[i].status = LOADING;
+
+                    this.file_reader.push({socket: socket, block: this.blocks[i]});
                     h = 1;
                     break;
                 }
@@ -211,35 +239,5 @@ export class Upload extends Event {
             this.progress();
         };
         xhr.send(new Uint8Array(block.blob));
-    }
-
-    _read_block(socket, block) {
-
-        socket.status = BUSY;
-        block.status = LOADING;
-
-        if (block.blob) {
-            return this._upload_block(socket, block);
-        }
-
-        this.read_queue.push([socket, block]);
-
-        let reader = new FileReader;
-
-        reader.onloadend = evt => {
-            let target = evt.target;
-            if (target.readyState === FileReader.DONE) {
-                block.blob = target.result;
-                block.real_size = block.blob.byteLength;
-                if (block.id === 0) {
-                    block.real_offset = 0;
-                } else {
-                    let prevBlock = this.blocks[block.id-1];
-                    block.real_offset = prevBlock.real_size + prevBlock.real_offset;
-                }
-                this._upload_block(socket, block);
-            }
-        };
-        reader.readAsArrayBuffer(this.file.slice(block.offset, block.end))
     }
 }

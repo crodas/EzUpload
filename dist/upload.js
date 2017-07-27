@@ -116,8 +116,34 @@ var FileUploader =
 
 	        _this.file_reader = new _queue2.default(function (args, next) {
 	            var socket = args.socket,
-	                queue = args.queue;
+	                block = args.block;
+
+
+	            if (block.blob) {
+	                _this._upload_block(socket, block);
+	                return next();
+	            }
+
+	            var reader = new FileReader();
+	            reader.onloadend = function (evt) {
+	                var target = evt.target;
+	                if (target.readyState === FileReader.DONE) {
+	                    block.blob = target.result;
+	                    block.real_size = block.blob.byteLength;
+	                    if (block.id === 0) {
+	                        block.real_offset = 0;
+	                    } else {
+	                        var prevBlock = _this.blocks[block.id - 1];
+	                        block.real_offset = prevBlock.real_size + prevBlock.real_offset;
+	                    }
+
+	                    _this._upload_block(socket, block);
+	                    next();
+	                }
+	            };
+	            reader.readAsArrayBuffer(_this.file.slice(block.offset, block.end));
 	        }, 1);
+
 	        return _this;
 	    }
 
@@ -252,7 +278,10 @@ var FileUploader =
 	                var h = 0;
 	                for (var i = 0; i < this.blocks.length; ++i) {
 	                    if (this.blocks[i].status === WAITING) {
-	                        this._read_block(socket, this.blocks[i]);
+	                        socket.status = BUSY;
+	                        this.blocks[i].status = LOADING;
+
+	                        this.file_reader.push({ socket: socket, block: this.blocks[i] });
 	                        h = 1;
 	                        break;
 	                    }
@@ -312,38 +341,6 @@ var FileUploader =
 	                _this4.progress();
 	            };
 	            xhr.send(new Uint8Array(block.blob));
-	        }
-	    }, {
-	        key: '_read_block',
-	        value: function _read_block(socket, block) {
-	            var _this5 = this;
-
-	            socket.status = BUSY;
-	            block.status = LOADING;
-
-	            if (block.blob) {
-	                return this._upload_block(socket, block);
-	            }
-
-	            this.read_queue.push([socket, block]);
-
-	            var reader = new FileReader();
-
-	            reader.onloadend = function (evt) {
-	                var target = evt.target;
-	                if (target.readyState === FileReader.DONE) {
-	                    block.blob = target.result;
-	                    block.real_size = block.blob.byteLength;
-	                    if (block.id === 0) {
-	                        block.real_offset = 0;
-	                    } else {
-	                        var prevBlock = _this5.blocks[block.id - 1];
-	                        block.real_offset = prevBlock.real_size + prevBlock.real_offset;
-	                    }
-	                    _this5._upload_block(socket, block);
-	                }
-	            };
-	            reader.readAsArrayBuffer(this.file.slice(block.offset, block.end));
 	        }
 	    }]);
 
@@ -458,11 +455,49 @@ var FileUploader =
 	    value: true
 	});
 
+	var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
+
 	function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
 
-	var Queue = function Queue(worker, limit) {
-	    _classCallCheck(this, Queue);
-	};
+	var Queue = function () {
+	    function Queue(worker) {
+	        var limit = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : 1;
+
+	        _classCallCheck(this, Queue);
+
+	        this.worker = worker;
+	        this.limit = limit;
+	        this.running = 0;
+	        this.queue = [];
+	    }
+
+	    _createClass(Queue, [{
+	        key: "_run_queue",
+	        value: function _run_queue() {
+	            var _this = this;
+
+	            while (this.running < this.limit) {
+	                var args = this.queue.shift();
+	                if (!args) {
+	                    break;
+	                }
+	                ++this.running;
+	                this.worker(args, function () {
+	                    --_this.running;
+	                    _this._run_queue();
+	                });
+	            }
+	        }
+	    }, {
+	        key: "push",
+	        value: function push(args) {
+	            this.queue.push(args);
+	            this._run_queue();
+	        }
+	    }]);
+
+	    return Queue;
+	}();
 
 	exports.default = Queue;
 
