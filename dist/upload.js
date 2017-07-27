@@ -60,6 +60,10 @@ var FileUploader =
 
 	var _utils = __webpack_require__(2);
 
+	var _queue = __webpack_require__(3);
+
+	var _queue2 = _interopRequireDefault(_queue);
+
 	function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
 
 	function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
@@ -68,9 +72,11 @@ var FileUploader =
 
 	function _inherits(subClass, superClass) { if (typeof superClass !== "function" && superClass !== null) { throw new TypeError("Super expression must either be null or a function, not " + typeof superClass); } subClass.prototype = Object.create(superClass && superClass.prototype, { constructor: { value: subClass, enumerable: false, writable: true, configurable: true } }); if (superClass) Object.setPrototypeOf ? Object.setPrototypeOf(subClass, superClass) : subClass.__proto__ = superClass; }
 
-	var WAITING = -1;
-	var BUSY = -2;
-	var DONE = -3;
+	var WAITING = 1;
+	var LOADING = 2;
+	var UPLOAD = 3;
+	var BUSY = 4;
+	var DONE = 5;
 
 	if (typeof Promise !== "function") {
 	    throw new Error("This browser does not have any promisse. Please load bluebird first");
@@ -92,8 +98,26 @@ var FileUploader =
 	        _this.file = file;
 	        _this.hash = hash;
 	        _this.url = url;
-	        _this.chunk_size = 4 * 1024 * 1024;
+	        _this.max_block_size = 1024 * 1024;
 	        _this.file_size = file.size;
+
+	        // The file is split into blocks which are uploaded. This is a "map"
+	        // which contains information about the file block. We just read up to 
+	        // 4 blocks at a time. So at most we would have 4MB of a file in RAM at 
+	        // most.
+	        _this.blocks = [];
+
+	        // "Sockets". This is not really any socket, just an array which represents
+	        // a request which is going on.
+	        var id = 0;
+	        _this.sockets = Array(4).fill(1).map(function (m) {
+	            return { status: WAITING, block: 0, id: id++ };
+	        });
+
+	        _this.file_reader = new _queue2.default(function (args, next) {
+	            var socket = args.socket,
+	                queue = args.queue;
+	        }, 1);
 	        return _this;
 	    }
 
@@ -145,8 +169,9 @@ var FileUploader =
 	    }, {
 	        key: '_check_upload_finished',
 	        value: function _check_upload_finished() {
-	            for (var i = 0; i < this.chunks.length; ++i) {
-	                if (this.chunks[i].status !== DONE) {
+
+	            for (var i = 0; i < this.sockets.length; ++i) {
+	                if (this.sockets[i].status !== WAITING) {
 	                    return;
 	                }
 	            }
@@ -177,37 +202,12 @@ var FileUploader =
 	                }
 
 	                response = response.response;
-	                if (typeof response.chunk_limit === "number") {
-	                    _this2.chunk_size = response.chunk_limit;
+	                if (typeof response.block_limit === "number") {
+	                    _this2.block_size = Math.min(parseInt(response.block_limit), _this2.max_block_size);
 	                }
 	                _this2.file_id = response.file_id;
 	                _this2._begin_upload();
 	            });
-	        }
-
-	        /**
-	         * Returns a new array whose contents are a copy shuffled of the array.
-	         * @param {Array} a items to shuffle.
-	         * https://stackoverflow.com/a/2450976/1673761
-	         */
-
-	    }, {
-	        key: 'shuffle',
-	        value: function shuffle(array) {
-	            var currentIndex = array.length;
-	            var temporaryValue = void 0;
-	            var randomIndex = void 0;
-	            var newArray = array.slice();
-	            // While there remain elements to shuffle...
-	            while (currentIndex) {
-	                randomIndex = Math.floor(Math.random() * currentIndex);
-	                currentIndex -= 1;
-	                // And swap it with the current element.
-	                temporaryValue = newArray[currentIndex];
-	                newArray[currentIndex] = newArray[randomIndex];
-	                newArray[randomIndex] = temporaryValue;
-	            }
-	            return newArray;
 	        }
 	    }, {
 	        key: '_begin_upload',
@@ -215,101 +215,135 @@ var FileUploader =
 	            var _this3 = this;
 
 	            var pos = 0;
-	            this.chunks = Array(Math.ceil(this.file.size / this.chunk_size)).fill(1).map(function () {
-	                var offset = pos * _this3.chunk_size;
-	                var end = Math.min(++pos * _this3.chunk_size, _this3.file.size);
+	            this.blocks = Array(Math.ceil(this.file.size / this.block_size)).fill(1).map(function () {
+	                var offset = pos * _this3.block_size;
+	                var end = Math.min(++pos * _this3.block_size, _this3.file.size);
 	                return {
+	                    id: pos - 1,
 	                    status: WAITING,
 	                    offset: offset,
 	                    end: end,
 	                    size: end - offset,
-	                    uploaded: 0
+	                    uploaded: 0,
+	                    blob: null,
+
+	                    real_offset: null,
+	                    real_size: null
 	                };
 	            });
-	            this.chunks = this.shuffle(this.chunks);
-	            this._do_upload();
+	            this._upload_next_block();
 	        }
 	    }, {
-	        key: '_how_many_busy',
-	        value: function _how_many_busy() {
-	            var busy = 0;
-	            for (var i = 0; i < this.chunks.length && busy < 5; ++i) {
-	                if (this.chunks[i].status === BUSY) {
-	                    ++busy;
+	        key: '_get_free_socket',
+	        value: function _get_free_socket() {
+	            for (var i = 0; i < this.sockets.length; ++i) {
+	                if (this.sockets[i].status === WAITING) {
+	                    return this.sockets[i];
 	                }
 	            }
-	            return busy;
+
+	            return false;
 	        }
 	    }, {
-	        key: '_do_upload',
-	        value: function _do_upload() {
-	            var busy = this._how_many_busy();
-	            for (var i = 0; i < this.chunks.length && busy < 5; ++i) {
-	                if (this.chunks[i].status === WAITING) {
-	                    this._upload_chunk(i);
-	                    ++busy;
+	        key: '_upload_next_block',
+	        value: function _upload_next_block() {
+	            var socket = void 0;
+	            while (socket = this._get_free_socket()) {
+	                var h = 0;
+	                for (var i = 0; i < this.blocks.length; ++i) {
+	                    if (this.blocks[i].status === WAITING) {
+	                        this._read_block(socket, this.blocks[i]);
+	                        h = 1;
+	                        break;
+	                    }
 	                }
-	            }
-	            if (busy === 0) {
-	                this._check_upload_finished();
+	                if (!h) {
+	                    return this._check_upload_finished();
+	                }
 	            }
 	        }
 	    }, {
 	        key: 'progress',
 	        value: function progress() {
-	            this.emit('progress', this.file_size, this.chunks.map(function (m) {
+	            this.emit('progress', this.file_size, this.blocks.map(function (m) {
 	                return m.uploaded;
 	            }).reduce(function (a, b) {
 	                return a + b;
 	            }, 0));
 	        }
 	    }, {
-	        key: '_upload_chunk',
-	        value: function _upload_chunk(id) {
+	        key: '_upload_block',
+	        value: function _upload_block(socket, block) {
 	            var _this4 = this;
 
-	            var retries = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : 0;
+	            var xhr = this._xhr('PUT', {
+	                'Content-Type': 'application/binary',
+	                'X-HASH': this.hash.apply(null, [block.blob]),
+	                'X-OFFSET': block.real_offset
+	            });
+	            socket.status = BUSY;
+	            block.status = UPLOAD;
+	            xhr.then(function (result) {
+	                var response = result.responseText;
+	                if (typeof response === "string") {
+	                    response = JSON.parse(response);
+	                }
+	                if (result.status !== 200 || !response || !response.success) {
+	                    throw new Error('internal error');
+	                }
 
-	            this.chunks[id].status = BUSY;
-	            var chunk = this.chunks[id];
+	                block.status = DONE;
+	                block.uploaded = block.blob.byteLength;
+	                block.blob = null; // release memory
+
+	                socket.status = WAITING; // release socket slot.
+
+	                _this4.progress();
+	                _this4._upload_next_block();
+	            }).catch(function (r) {
+	                socket.status = WAITING; // release socket slot.
+	                block.status = WAITING;
+	                block.uploaded = 0;
+	                _this4.progress();
+	                _this4._upload_next_block();
+	            });
+	            xhr.upload.onprogress = function (e) {
+	                block.uploaded = e.loaded;
+	                _this4.progress();
+	            };
+	            xhr.send(new Uint8Array(block.blob));
+	        }
+	    }, {
+	        key: '_read_block',
+	        value: function _read_block(socket, block) {
+	            var _this5 = this;
+
+	            socket.status = BUSY;
+	            block.status = LOADING;
+
+	            if (block.blob) {
+	                return this._upload_block(socket, block);
+	            }
+
+	            this.read_queue.push([socket, block]);
+
 	            var reader = new FileReader();
 
 	            reader.onloadend = function (evt) {
 	                var target = evt.target;
-	                var size = target.result.byteLength;
 	                if (target.readyState === FileReader.DONE) {
-	                    var xhr = _this4._xhr('PUT', {
-	                        'Content-Type': 'application/binary',
-	                        'X-HASH': _this4.hash.apply(null, [target.result]),
-	                        'X-OFFSET': chunk.offset
-	                    });
-	                    xhr.then(function (result) {
-	                        var response = result.responseText;
-	                        if (typeof response === "string") {
-	                            response = JSON.parse(response);
-	                        }
-	                        if (result.status !== 200 || !response || !response.success) {
-	                            throw new Error('internal error');
-	                        }
-	                        chunk.status = DONE;
-	                        chunk.uploaded = target.result.byteLength;
-	                        _this4.progress();
-
-	                        _this4._do_upload();
-	                    }).catch(function (r) {
-	                        chunk.status = WAITING;
-	                        chunk.uploaded = 0;
-	                        _this4.progress();
-	                        _this4._do_upload();
-	                    });
-	                    xhr.upload.onprogress = function (e) {
-	                        chunk.uploaded = e.loaded;
-	                        _this4.progress();
-	                    };
-	                    xhr.send(new Uint8Array(target.result));
+	                    block.blob = target.result;
+	                    block.real_size = block.blob.byteLength;
+	                    if (block.id === 0) {
+	                        block.real_offset = 0;
+	                    } else {
+	                        var prevBlock = _this5.blocks[block.id - 1];
+	                        block.real_offset = prevBlock.real_size + prevBlock.real_offset;
+	                    }
+	                    _this5._upload_block(socket, block);
 	                }
 	            };
-	            reader.readAsArrayBuffer(this.file.slice(chunk.offset, chunk.end));
+	            reader.readAsArrayBuffer(this.file.slice(block.offset, block.end));
 	        }
 	    }]);
 
@@ -413,6 +447,24 @@ var FileUploader =
 	    }
 	    return str;
 	}
+
+/***/ }),
+/* 3 */
+/***/ (function(module, exports) {
+
+	"use strict";
+
+	Object.defineProperty(exports, "__esModule", {
+	    value: true
+	});
+
+	function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
+
+	var Queue = function Queue(worker, limit) {
+	    _classCallCheck(this, Queue);
+	};
+
+	exports.default = Queue;
 
 /***/ })
 /******/ ]);

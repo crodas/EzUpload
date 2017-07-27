@@ -97,8 +97,8 @@ class Server
         $writer->create();
         $this->send_response([
             'file_id' => $id,
-            'min_chunk_size' => min($this->chunkSize() / 2, 1024 * 1024),
-            'chunk_limit' => $this->chunkSize(),
+            'min_block_size' => min($this->chunkSize() / 2, 1024 * 1024),
+            'block_limit' => $this->chunkSize(),
         ]);
     }
 

@@ -1,9 +1,12 @@
 import Event from 'tiny-emitter';
 import {array, build_http_query} from './utils'
+import Queue from './queue';
 
-const WAITING = -1;
-const BUSY = -2;
-const DONE = -3;
+const WAITING = 1;
+const LOADING = 2;
+const UPLOAD  = 3;
+const BUSY = 4;
+const DONE = 5;
 
 if (typeof Promise !== "function") {
     throw new Error("This browser does not have any promisse. Please load bluebird first");
@@ -18,8 +21,23 @@ export class Upload extends Event {
         this.file = file;
         this.hash = hash;
         this.url  = url;
-        this.chunk_size = 4 * 1024 * 1024;
+        this.max_block_size = 1024 * 1024;
         this.file_size  = file.size;
+
+        // The file is split into blocks which are uploaded. This is a "map"
+        // which contains information about the file block. We just read up to 
+        // 4 blocks at a time. So at most we would have 4MB of a file in RAM at 
+        // most.
+        this.blocks = [];
+
+        // "Sockets". This is not really any socket, just an array which represents
+        // a request which is going on.
+        let id = 0;
+        this.sockets = Array(4).fill(1).map(m => { return {status: WAITING, block: 0, id: id++} });
+
+        this.file_reader = new Queue((args, next) => {
+            let {socket, queue} = args;
+        }, 1);
     }
 
     _xhr(action, headers = {}) {
@@ -64,8 +82,9 @@ export class Upload extends Event {
     }
 
     _check_upload_finished() {
-        for (let i = 0; i < this.chunks.length; ++i) {
-            if (this.chunks[i].status !== DONE) {
+
+        for (let i=0; i < this.sockets.length; ++i) {
+            if (this.sockets[i].status !== WAITING) {
                 return;
             }
         }
@@ -93,121 +112,134 @@ export class Upload extends Event {
             }
 
             response = response.response;
-            if (typeof response.chunk_limit === "number") {
-                this.chunk_size = response.chunk_limit;
+            if (typeof response.block_limit === "number") {
+                this.block_size = Math.min(parseInt(response.block_limit), this.max_block_size);
             }
             this.file_id = response.file_id;
             this._begin_upload();
         });
     }
 
-     /**
-      * Returns a new array whose contents are a copy shuffled of the array.
-      * @param {Array} a items to shuffle.
-      * https://stackoverflow.com/a/2450976/1673761
-      */
-    shuffle(array) {
-        let currentIndex = array.length;
-        let temporaryValue;
-        let randomIndex;
-        const newArray = array.slice();
-        // While there remain elements to shuffle...
-        while (currentIndex) {
-            randomIndex = Math.floor(Math.random() * currentIndex);
-            currentIndex -= 1;
-            // And swap it with the current element.
-            temporaryValue = newArray[currentIndex];
-            newArray[currentIndex] = newArray[randomIndex];
-            newArray[randomIndex] = temporaryValue;
-        }
-        return newArray;
-    };
-
     _begin_upload() {
         let pos = 0;
-        this.chunks = Array(Math.ceil(this.file.size / this.chunk_size)).fill(1)
+        this.blocks = Array(Math.ceil(this.file.size / this.block_size)).fill(1)
             .map(() => {
-                let offset = pos * this.chunk_size;
-                let end = Math.min(++pos * this.chunk_size, this.file.size);
+                let offset = pos * this.block_size;
+                let end = Math.min(++pos * this.block_size, this.file.size);
                 return {
+                    id: pos - 1,
                     status: WAITING,
                     offset,
                     end,
                     size: end - offset,
-                    uploaded: 0
+                    uploaded: 0,
+                    blob: null,
+
+                    real_offset: null,
+                    real_size: null,
                 };
             })
-        this.chunks = this.shuffle(this.chunks);
-        this._do_upload();
+        this._upload_next_block();
     }
 
-    _how_many_busy() {
-        let busy = 0;
-        for (let i=0; i < this.chunks.length && busy < 5; ++i) {
-            if (this.chunks[i].status === BUSY) {
-                ++busy;
+    _get_free_socket() {
+        for (let i=0; i < this.sockets.length; ++i) {
+            if (this.sockets[i].status === WAITING) {
+                return this.sockets[i];
             }
         }
-        return busy;
+
+        return false;
     }
 
-    _do_upload() {
-        let busy = this._how_many_busy();
-        for (let i=0; i < this.chunks.length && busy < 5; ++i) {
-            if (this.chunks[i].status === WAITING) {
-                this._upload_chunk(i);
-                ++busy;
+    _upload_next_block() {
+        let socket;
+        while (socket = this._get_free_socket()) {
+            let h = 0;
+            for (let i=0; i < this.blocks.length; ++i) {
+                if (this.blocks[i].status === WAITING) {
+                    this._read_block(socket, this.blocks[i]);
+                    h = 1;
+                    break;
+                }
+            }
+            if (!h) {
+                return this._check_upload_finished();
             }
         }
-        if (busy === 0) {
-            this._check_upload_finished();
-        }
+
     }
 
     progress() {
-        this.emit('progress', this.file_size, this.chunks.map(m => m.uploaded).reduce((a, b) => a+b, 0));
+        this.emit('progress', this.file_size, this.blocks.map(m => m.uploaded).reduce((a, b) => a+b, 0));
     }
 
-    _upload_chunk(id, retries = 0) {
-        this.chunks[id].status = BUSY;
-        let chunk  = this.chunks[id];
+    _upload_block(socket, block) {
+        let xhr = this._xhr('PUT', {
+            'Content-Type': 'application/binary',
+            'X-HASH':  this.hash.apply(null, [block.blob]),
+            'X-OFFSET': block.real_offset,
+        })
+        socket.status = BUSY;
+        block.status  = UPLOAD;
+        xhr.then(result => {
+            let response = result.responseText;
+            if (typeof response === "string") {
+                response = JSON.parse(response);
+            }
+            if (result.status !== 200 || !response || !response.success) {
+                throw new Error('internal error');
+            }
+
+            block.status = DONE;
+            block.uploaded = block.blob.byteLength;
+            block.blob = null; // release memory
+
+            socket.status = WAITING; // release socket slot.
+
+            this.progress();
+            this._upload_next_block();
+        }).catch(r => {
+            socket.status = WAITING; // release socket slot.
+            block.status = WAITING
+            block.uploaded = 0;
+            this.progress();
+            this._upload_next_block();
+        });
+        xhr.upload.onprogress = e => {
+            block.uploaded = e.loaded;
+            this.progress();
+        };
+        xhr.send(new Uint8Array(block.blob));
+    }
+
+    _read_block(socket, block) {
+
+        socket.status = BUSY;
+        block.status = LOADING;
+
+        if (block.blob) {
+            return this._upload_block(socket, block);
+        }
+
+        this.read_queue.push([socket, block]);
+
         let reader = new FileReader;
 
         reader.onloadend = evt => {
             let target = evt.target;
-            let size   = target.result.byteLength;
             if (target.readyState === FileReader.DONE) {
-                let xhr = this._xhr('PUT', {
-                    'Content-Type': 'application/binary',
-                    'X-HASH':  this.hash.apply(null, [target.result]),
-                    'X-OFFSET': chunk.offset,
-                })
-                xhr.then(result => {
-                    let response = result.responseText;
-                    if (typeof response === "string") {
-                        response = JSON.parse(response);
-                    }
-                    if (result.status !== 200 || !response || !response.success) {
-                        throw new Error('internal error');
-                    }
-                    chunk.status = DONE;
-                    chunk.uploaded = target.result.byteLength;
-                    this.progress();
-
-                    this._do_upload();
-                }).catch(r => {
-                    chunk.status = WAITING
-                    chunk.uploaded = 0;
-                    this.progress();
-                    this._do_upload();
-                });
-                xhr.upload.onprogress = e => {
-                    chunk.uploaded = e.loaded;
-                    this.progress();
-                };
-                xhr.send(new Uint8Array(target.result));
+                block.blob = target.result;
+                block.real_size = block.blob.byteLength;
+                if (block.id === 0) {
+                    block.real_offset = 0;
+                } else {
+                    let prevBlock = this.blocks[block.id-1];
+                    block.real_offset = prevBlock.real_size + prevBlock.real_offset;
+                }
+                this._upload_block(socket, block);
             }
         };
-        reader.readAsArrayBuffer(this.file.slice(chunk.offset, chunk.end))
+        reader.readAsArrayBuffer(this.file.slice(block.offset, block.end))
     }
 }
