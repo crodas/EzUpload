@@ -484,15 +484,21 @@ var FileUploader =
 	                ++this.running;
 	                this.worker(args, function () {
 	                    --_this.running;
-	                    _this._run_queue();
+	                    setTimeout(function () {
+	                        _this._run_queue();
+	                    });
 	                });
 	            }
 	        }
 	    }, {
 	        key: "push",
 	        value: function push(args) {
+	            var _this2 = this;
+
 	            this.queue.push(args);
-	            this._run_queue();
+	            setTimeout(function () {
+	                _this2._run_queue();
+	            });
 	        }
 	    }]);
 

@@ -195,7 +195,6 @@ export class Upload extends Event {
                 return this._check_upload_finished();
             }
         }
-
     }
 
     progress() {

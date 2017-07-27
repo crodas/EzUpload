@@ -16,13 +16,17 @@ export default class Queue {
             ++this.running;
             this.worker(args, () => {
                 --this.running;
-                this._run_queue();
+                setTimeout(() => {
+                    this._run_queue();
+                });
             });
         }
     }
 
     push(args) {
         this.queue.push(args);
-        this._run_queue();
+        setTimeout(() => {
+            this._run_queue();
+        });
     }
 }
