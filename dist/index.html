@@ -26,7 +26,7 @@
 </div>
 
     <script src="./sha256.min.js"></script>
-    <script src="./upload.js"></script>
+    <script src="./ezupload.js"></script>
     <script
         src="https://code.jquery.com/jquery-3.2.1.min.js"
         integrity="sha256-hwg4gsxgFZhOsEEamdOYGBf13FyQuiTwlAQgxVSNgt4="
@@ -43,6 +43,9 @@ $('#file').on('change', function(evt) {
     }
 
     $('#upload').removeClass('disabled').unbind('click').bind('click', function() {
+        uploader[0].on('post', function(d) {
+            d.cesar = 'hi';
+        });
         uploader[0].upload();
         uploader[0].on('progress', function(size, done) {
             $('.progress-bar').css('width', (done/size * 100) + '%')

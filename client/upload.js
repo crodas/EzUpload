@@ -47,7 +47,7 @@ export class Upload extends Event {
             reader.onloadend = evt => {
                 let target = evt.target;
                 if (target.readyState === FileReader.DONE) {
-                    this.transform_block(block.offset, target.result, (err, bytes) {
+                    this.transform_block(block.offset, target.result, (err, bytes) => {
                         if (err) bytes = target.result;
                         block.blob = bytes;
                         block.real_size = block.blob.byteLength;
@@ -68,7 +68,7 @@ export class Upload extends Event {
 
     }
 
-    // Last change to transform a block before uploading
+    // Last change to transform a block Nbefore uploading
     transform_block(offset, bytes, next) {
         next(null, bytes);
     }
@@ -110,6 +110,7 @@ export class Upload extends Event {
 
     _do_post(data) {
         let xhr = this._xhr('POST', {'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8'});
+        this.emit('post', data);
         xhr.send(build_http_query(data));
         return xhr;
     }

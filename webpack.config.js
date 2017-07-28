@@ -5,7 +5,7 @@ var config = {
      entry: './client/upload',
      output: {
          path: __dirname,
-         filename: 'dist/upload.js',
+         filename: 'dist/ezupload.js',
          library: ['FileUploader'],
      },
      module: {
