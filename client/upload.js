@@ -1,6 +1,7 @@
 import Event from 'tiny-emitter';
 import {array, build_http_query} from './utils'
 import Queue from './queue';
+import sha256 from './sha256.min.js'
 
 const WAITING = 1;
 const LOADING = 2;
@@ -12,8 +13,9 @@ if (typeof Promise !== "function") {
     throw new Error("This browser does not have any promisse. Please load bluebird first");
 }
 
-export class Upload extends Event {
-    constructor(file, url, hash = window.sha256) {
+
+class Upload extends Event {
+    constructor(file, url, hash = sha256) {
         super();
         if (typeof hash !== "function") {
             throw new Error("The hash is not a valid function");
@@ -249,3 +251,5 @@ export class Upload extends Event {
         xhr.send(new Uint8Array(block.blob));
     }
 }
+
+export {Upload as default, Upload, Queue, sha256};

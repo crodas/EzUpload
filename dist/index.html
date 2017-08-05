@@ -25,7 +25,6 @@
   </div><!-- /.col-lg-6 -->
 </div>
 
-    <script src="./sha256.min.js"></script>
     <script src="./ezupload.js"></script>
     <script
         src="https://code.jquery.com/jquery-3.2.1.min.js"
@@ -39,7 +38,7 @@ $('#file').on('change', function(evt) {
     // files is a FileList of File objects. List some properties.
     var uploader = [];
     for (var i = 0, file; file = files[i]; i++) {
-        uploader.push(new FileUploader.Upload(file, "./upload.php", sha256));
+        uploader.push(new FileUploader.Upload(file, "./upload.php"));
     }
 
     $('#upload').removeClass('disabled').unbind('click').bind('click', function() {
