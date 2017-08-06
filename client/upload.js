@@ -117,6 +117,10 @@ class Upload extends Event {
         return xhr;
     }
 
+    finalize_upload(args, next) {
+        next();
+    }
+
     _check_upload_finished() {
 
         for (let i=0; i < this.sockets.length; ++i) {
@@ -125,8 +129,12 @@ class Upload extends Event {
             }
         }
 
-        this._do_post({
+        let args = {
             'action': 'finish',
+        }
+
+        this.finalize_upload(args, (err) => {
+            this._do_post(args);
         });
     }
 

@@ -209,8 +209,14 @@ var FileUploader =
 	            return xhr;
 	        }
 	    }, {
+	        key: 'finalize_upload',
+	        value: function finalize_upload(args, next) {
+	            next();
+	        }
+	    }, {
 	        key: '_check_upload_finished',
 	        value: function _check_upload_finished() {
+	            var _this2 = this;
 
 	            for (var i = 0; i < this.sockets.length; ++i) {
 	                if (this.sockets[i].status !== WAITING) {
@@ -218,14 +224,18 @@ var FileUploader =
 	                }
 	            }
 
-	            this._do_post({
+	            var args = {
 	                'action': 'finish'
+	            };
+
+	            this.finalize_upload(args, function (err) {
+	                _this2._do_post(args);
 	            });
 	        }
 	    }, {
 	        key: 'upload',
 	        value: function upload() {
-	            var _this2 = this;
+	            var _this3 = this;
 
 	            this._do_post({
 	                name: this.file.name,
@@ -245,21 +255,21 @@ var FileUploader =
 
 	                response = response.response;
 	                if (typeof response.block_limit === "number") {
-	                    _this2.block_size = Math.min(parseInt(response.block_limit), _this2.max_block_size);
+	                    _this3.block_size = Math.min(parseInt(response.block_limit), _this3.max_block_size);
 	                }
-	                _this2.file_id = response.file_id;
-	                _this2._begin_upload();
+	                _this3.file_id = response.file_id;
+	                _this3._begin_upload();
 	            });
 	        }
 	    }, {
 	        key: '_begin_upload',
 	        value: function _begin_upload() {
-	            var _this3 = this;
+	            var _this4 = this;
 
 	            var pos = 0;
 	            this.blocks = Array(Math.ceil(this.file.size / this.block_size)).fill(1).map(function () {
-	                var offset = pos * _this3.block_size;
-	                var end = Math.min(++pos * _this3.block_size, _this3.file.size);
+	                var offset = pos * _this4.block_size;
+	                var end = Math.min(++pos * _this4.block_size, _this4.file.size);
 	                return {
 	                    id: pos - 1,
 	                    status: WAITING,
@@ -319,7 +329,7 @@ var FileUploader =
 	    }, {
 	        key: '_upload_block',
 	        value: function _upload_block(socket, block) {
-	            var _this4 = this;
+	            var _this5 = this;
 
 	            var xhr = this._xhr('PUT', {
 	                'Content-Type': 'application/binary',
@@ -343,18 +353,18 @@ var FileUploader =
 
 	                socket.status = WAITING; // release socket slot.
 
-	                _this4.progress();
-	                _this4._upload_next_block();
+	                _this5.progress();
+	                _this5._upload_next_block();
 	            }).catch(function (r) {
 	                socket.status = WAITING; // release socket slot.
 	                block.status = WAITING;
 	                block.uploaded = 0;
-	                _this4.progress();
-	                _this4._upload_next_block();
+	                _this5.progress();
+	                _this5._upload_next_block();
 	            });
 	            xhr.upload.onprogress = function (e) {
 	                block.uploaded = e.loaded;
-	                _this4.progress();
+	                _this5.progress();
 	            };
 	            xhr.send(new Uint8Array(block.blob));
 	        }
