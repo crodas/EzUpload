@@ -3,6 +3,7 @@
 namespace EzUpload;
 
 use ConcurrentFileWriter\ConcurrentFileWriter;
+use RuntimeException;
 
 class Server
 {
