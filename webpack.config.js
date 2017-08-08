@@ -3,7 +3,7 @@ var nodeExternals = require('webpack-node-externals');
 var webpack = require('webpack');
 
 var config = {
-    entry: './client/upload',
+    entry: './client/index',
     output: {
          path: __dirname,
          filename: 'dist/ezupload.js',
