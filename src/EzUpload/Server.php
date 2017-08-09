@@ -75,7 +75,11 @@ class Server
             $this->config->getUploadDirectory() . '/' . basename($_SERVER['HTTP_X_FILE_ID']),
             $this->config->getTemporaryDirectory()
         );
-        $this->send_response(['finished' => $writer->finalize()]);
+        $data = json_decode(file_get_contents($this->config->getUploadDirectory() . '/' . basename($_SERVER['HTTP_X_FILE_ID'])));
+        $this->send_response(array_merge(
+            (array)$data->metadata,
+            ['finished' => $writer->finalize()]
+        ));
     }
 
     protected function handleInitUpload()
@@ -95,7 +99,7 @@ class Server
             $this->config->getUploadDirectory() . '/' . $id,
             $this->config->getTemporaryDirectory()
         );
-        $writer->create();
+        $writer->create($meta);
         $this->send_response([
             'file_id' => $id,
             'min_block_size' => min($this->chunkSize() / 2, 1024 * 1024),

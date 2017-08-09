@@ -27,7 +27,7 @@ export default class Download extends Client {
         return parseInt(size[1]);
     }
     // }}}
-    
+
     _download_block(block, socket) {
         let xhr = this._xhr('GET', {
             'pragma':'no-cache',
@@ -35,7 +35,15 @@ export default class Download extends Client {
             'range': 'bytes=' + block.offset + '-' + (block.end-1)
         })
         xhr.getXhr().responseType = "arraybuffer";
-        xhr.then(r => this._writer.push({block, socket, bytes: r.responseText}))
+        xhr.then(r => {
+            block.downloaded = r.responseText.byteLength;
+            this._writer.push({block, socket, bytes: r.responseText})
+        }).catch(r => {
+            socket.status = Status.WAITING; // release socket slot.
+            block.status = Status.WAITING
+            block.downloaded = 0;
+            this.progress();
+        });
         xhr.send();
     }
 
@@ -91,9 +99,13 @@ export default class Download extends Client {
             break;
         };
 
-        console.error({msg});
         this.emit('error', msg);
-      }
+    }
+
+    progress() {
+        this.emit('progress', this.file_size, this.blocks.map(m => m.downloaded).reduce((a, b) => a+b, 0));
+    }
+
 
     download(download_file_name) {
         if (!download_file_name) {
@@ -109,7 +121,7 @@ export default class Download extends Client {
                 let requestFileSystem  = (window.requestFileSystem || window.webkitRequestFileSystem);
                 requestFileSystem(
                     window.TEMPORARY,
-                    this.file_size, 
+                    this.file_size,
                     fs => {
                         this.fs = fs;
                         fs.root.getFile('tmp', {create: true}, fileEntry => {

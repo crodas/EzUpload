@@ -263,7 +263,11 @@ this["FileUploader"] =
 	            };
 
 	            this.finalize_upload(args, function (err) {
-	                _this2._do_post(args);
+	                _this2._do_post(args).then(function (r) {
+	                    var response = JSON.parse(r.responseText);
+	                    _this2.progress();
+	                    _this2.emit('end', !!response.success, response.response, _this2);
+	                });
 	            });
 	        }
 	    }, {
@@ -783,7 +787,13 @@ this["FileUploader"] =
 	            });
 	            xhr.getXhr().responseType = "arraybuffer";
 	            xhr.then(function (r) {
-	                return _this2._writer.push({ block: block, socket: socket, bytes: r.responseText });
+	                block.downloaded = r.responseText.byteLength;
+	                _this2._writer.push({ block: block, socket: socket, bytes: r.responseText });
+	            }).catch(function (r) {
+	                socket.status = _status2.default.WAITING; // release socket slot.
+	                block.status = _status2.default.WAITING;
+	                block.downloaded = 0;
+	                _this2.progress();
 	            });
 	            xhr.send();
 	        }
@@ -847,8 +857,16 @@ this["FileUploader"] =
 	                    break;
 	            };
 
-	            console.error({ msg: msg });
 	            this.emit('error', msg);
+	        }
+	    }, {
+	        key: 'progress',
+	        value: function progress() {
+	            this.emit('progress', this.file_size, this.blocks.map(function (m) {
+	                return m.downloaded;
+	            }).reduce(function (a, b) {
+	                return a + b;
+	            }, 0));
 	        }
 	    }, {
 	        key: 'download',
