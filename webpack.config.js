@@ -8,6 +8,7 @@ var config = {
          path: __dirname,
          filename: 'dist/ezupload.js',
          library: ['FileUploader'],
+         libraryTarget: 'this',
      },
     target: 'node',
     module: {
