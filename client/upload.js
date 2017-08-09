@@ -16,14 +16,14 @@ export default class Upload extends Client {
         this.file_size  = file.size;
 
         // The file is split into blocks which are uploaded. This is a "map"
-        // which contains information about the file block. We just read up to 
-        // 4 blocks at a time. So at most we would have 4MB of a file in RAM at 
+        // which contains information about the file block. We just read up to
+        // 4 blocks at a time. So at most we would have 4MB of a file in RAM
         // most.
         this.blocks = [];
 
         this.file_reader = new Queue((args, next) => {
             let {socket, block} = args;
-            
+
             if (block.blob) {
                 this._upload_block(socket, block);
                 return next();

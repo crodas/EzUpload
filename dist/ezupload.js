@@ -199,8 +199,8 @@ this["FileUploader"] =
 	        _this.file_size = file.size;
 
 	        // The file is split into blocks which are uploaded. This is a "map"
-	        // which contains information about the file block. We just read up to 
-	        // 4 blocks at a time. So at most we would have 4MB of a file in RAM at 
+	        // which contains information about the file block. We just read up to
+	        // 4 blocks at a time. So at most we would have 4MB of a file in RAM
 	        // most.
 	        _this.blocks = [];
 
