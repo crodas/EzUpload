@@ -729,6 +729,10 @@ this["FileUploader"] =
 
 	var _fileSaver = __webpack_require__(12);
 
+	var _sha256Min = __webpack_require__(7);
+
+	var _sha256Min2 = _interopRequireDefault(_sha256Min);
+
 	function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
 
 	function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
@@ -794,6 +798,7 @@ this["FileUploader"] =
 	                block.status = _status2.default.WAITING;
 	                block.downloaded = 0;
 	                _this2.progress();
+	                _this2._download();
 	            });
 	            xhr.send();
 	        }
@@ -884,7 +889,7 @@ this["FileUploader"] =
 	                var requestFileSystem = window.requestFileSystem || window.webkitRequestFileSystem;
 	                requestFileSystem(window.TEMPORARY, _this4.file_size, function (fs) {
 	                    _this4.fs = fs;
-	                    fs.root.getFile('tmp', { create: true }, function (fileEntry) {
+	                    fs.root.getFile((0, _sha256Min2.default)(_this4.url), { create: true }, function (fileEntry) {
 	                        _this4.fileEntry = fileEntry;
 
 	                        fileEntry.createWriter(function (writer) {

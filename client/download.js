@@ -2,6 +2,7 @@ import Queue from './queue';
 import Status from './status'
 import Client from './client';
 import {saveAs} from 'file-saver'
+import sha256 from './sha256.min.js'
 
 export default class Download extends Client {
     constructor(url) {
@@ -43,6 +44,7 @@ export default class Download extends Client {
             block.status = Status.WAITING
             block.downloaded = 0;
             this.progress();
+            this._download();
         });
         xhr.send();
     }
@@ -124,7 +126,7 @@ export default class Download extends Client {
                     this.file_size,
                     fs => {
                         this.fs = fs;
-                        fs.root.getFile('tmp', {create: true}, fileEntry => {
+                        fs.root.getFile(sha256(this.url), {create: true}, fileEntry => {
                             this.fileEntry = fileEntry;
 
                             fileEntry.createWriter(writer => {
