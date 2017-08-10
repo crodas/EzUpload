@@ -263,7 +263,7 @@ this["FileUploader"] =
 	                _this2._do_post(args).then(function (r) {
 	                    var response = JSON.parse(r.responseText);
 	                    _this2.progress();
-	                    _this2.emit('end', !!response.success, response.response, _this2);
+	                    _this2.emit('end', !response.success, response.response, _this2);
 	                });
 	            });
 	        }

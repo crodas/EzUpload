@@ -72,7 +72,7 @@ export default class Upload extends Client {
                 .then(r => {
                     let response = JSON.parse(r.responseText);
                     this.progress();
-                    this.emit('end', !!response.success, response.response, this);
+                    this.emit('end', !response.success, response.response, this);
                 });
         });
     }
