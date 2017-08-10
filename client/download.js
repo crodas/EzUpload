@@ -1,14 +1,43 @@
-import Queue from './queue';
 import Status from './status'
 import Client from './client';
 import {saveAs} from 'file-saver'
 import sha256 from './sha256.min.js'
 
+class Sequential_Queue {
+    constructor(worker) {
+        this.next_id = 0;
+        this.queue = [];
+        this.worker = worker;
+        this.busy  = false;
+    }
+
+    queue_size() {
+        return this.queue.length;
+    }
+
+    _run() {
+        if (!this.busy && this.queue.length > 0 && this.next_id === this.queue[0].id) {
+            this.busy = true;
+            this.worker.apply(null, [this.queue.shift().data, () => {
+                this.busy = false;
+                ++this.next_id;
+                this._run();
+            }]);
+        }
+    }
+
+    push(id, data) {
+        this.queue.push({id, data});
+        this.queue.sort((a, b) => a.id - b.id);
+        this._run();
+    }
+}
+
 export default class Download extends Client {
     constructor(url) {
         super(url)
         this.block_size = 2 * 1024 * 1024;
-        this._writer = new Queue((args, next) => {
+        this._writer = new Sequential_Queue((args, next) => {
             let {block, socket, bytes} = args;
             let fileWriter = this.fileWriter;
             fileWriter.onwriteend = () => {
@@ -18,9 +47,14 @@ export default class Download extends Client {
                 next();
                 this._maybe_is_ready();
             };
-            fileWriter.seek(block.offset);
-            fileWriter.write(new Blob([bytes]));
-        }, 1);
+            this.decode_block(block.offset, bytes, (err, _bytes) => {
+                fileWriter.write(new Blob([_bytes]));
+            });
+        });
+    }
+
+    decode_block(offset, bytes, next) {
+        next(null, bytes);
     }
 
     // _get_filesize() {{{
@@ -29,10 +63,6 @@ export default class Download extends Client {
         return parseInt(size[1]);
     }
     // }}}
-    
-    _write(block, socket, bytes) {
-        this._writer.push({block, socket, bytes})
-    }
 
     _download_block(block, socket) {
         let xhr = this._xhr('GET', {
@@ -43,7 +73,7 @@ export default class Download extends Client {
         xhr.getXhr().responseType = "arraybuffer";
         xhr.then(r => {
             block.downloaded = r.responseText.byteLength;
-            this._write(block, socket, r.responseText);
+            this._writer.push(block.id, {block, socket, bytes: r.responseText});
         }).catch(r => {
             socket.status = Status.WAITING; // release socket slot.
             block.status = Status.WAITING

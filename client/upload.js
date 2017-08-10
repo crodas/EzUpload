@@ -33,7 +33,7 @@ export default class Upload extends Client {
             reader.onloadend = evt => {
                 let target = evt.target;
                 if (target.readyState === FileReader.DONE) {
-                    this.transform_block(block.offset, target.result, (err, bytes) => {
+                    this.encode_block(block.offset, target.result, (err, bytes) => {
                         if (err) bytes = target.result;
                         block.blob = bytes;
                         block.real_size = block.blob.byteLength;
@@ -54,8 +54,7 @@ export default class Upload extends Client {
 
     }
 
-    // Last change to transform a block Nbefore uploading
-    transform_block(offset, bytes, next) {
+    encode_block(offset, bytes, next) {
         next(null, bytes);
     }
 

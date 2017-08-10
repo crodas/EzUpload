@@ -218,7 +218,7 @@ this["FileUploader"] =
 	            reader.onloadend = function (evt) {
 	                var target = evt.target;
 	                if (target.readyState === FileReader.DONE) {
-	                    _this.transform_block(block.offset, target.result, function (err, bytes) {
+	                    _this.encode_block(block.offset, target.result, function (err, bytes) {
 	                        if (err) bytes = target.result;
 	                        block.blob = bytes;
 	                        block.real_size = block.blob.byteLength;
@@ -240,12 +240,9 @@ this["FileUploader"] =
 	        return _this;
 	    }
 
-	    // Last change to transform a block Nbefore uploading
-
-
 	    _createClass(Upload, [{
-	        key: 'transform_block',
-	        value: function transform_block(offset, bytes, next) {
+	        key: 'encode_block',
+	        value: function encode_block(offset, bytes, next) {
 	            next(null, bytes);
 	        }
 	    }, {
@@ -715,10 +712,6 @@ this["FileUploader"] =
 
 	var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
 
-	var _queue = __webpack_require__(1);
-
-	var _queue2 = _interopRequireDefault(_queue);
-
 	var _status = __webpack_require__(5);
 
 	var _status2 = _interopRequireDefault(_status);
@@ -735,11 +728,54 @@ this["FileUploader"] =
 
 	function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
 
-	function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
-
 	function _possibleConstructorReturn(self, call) { if (!self) { throw new ReferenceError("this hasn't been initialised - super() hasn't been called"); } return call && (typeof call === "object" || typeof call === "function") ? call : self; }
 
 	function _inherits(subClass, superClass) { if (typeof superClass !== "function" && superClass !== null) { throw new TypeError("Super expression must either be null or a function, not " + typeof superClass); } subClass.prototype = Object.create(superClass && superClass.prototype, { constructor: { value: subClass, enumerable: false, writable: true, configurable: true } }); if (superClass) Object.setPrototypeOf ? Object.setPrototypeOf(subClass, superClass) : subClass.__proto__ = superClass; }
+
+	function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
+
+	var Sequential_Queue = function () {
+	    function Sequential_Queue(worker) {
+	        _classCallCheck(this, Sequential_Queue);
+
+	        this.next_id = 0;
+	        this.queue = [];
+	        this.worker = worker;
+	        this.busy = false;
+	    }
+
+	    _createClass(Sequential_Queue, [{
+	        key: 'queue_size',
+	        value: function queue_size() {
+	            return this.queue.length;
+	        }
+	    }, {
+	        key: '_run',
+	        value: function _run() {
+	            var _this = this;
+
+	            if (!this.busy && this.queue.length > 0 && this.next_id === this.queue[0].id) {
+	                this.busy = true;
+	                this.worker.apply(null, [this.queue.shift().data, function () {
+	                    _this.busy = false;
+	                    ++_this.next_id;
+	                    _this._run();
+	                }]);
+	            }
+	        }
+	    }, {
+	        key: 'push',
+	        value: function push(id, data) {
+	            this.queue.push({ id: id, data: data });
+	            this.queue.sort(function (a, b) {
+	                return a.id - b.id;
+	            });
+	            this._run();
+	        }
+	    }]);
+
+	    return Sequential_Queue;
+	}();
 
 	var Download = function (_Client) {
 	    _inherits(Download, _Client);
@@ -747,32 +783,38 @@ this["FileUploader"] =
 	    function Download(url) {
 	        _classCallCheck(this, Download);
 
-	        var _this = _possibleConstructorReturn(this, (Download.__proto__ || Object.getPrototypeOf(Download)).call(this, url));
+	        var _this2 = _possibleConstructorReturn(this, (Download.__proto__ || Object.getPrototypeOf(Download)).call(this, url));
 
-	        _this.block_size = 2 * 1024 * 1024;
-	        _this._writer = new _queue2.default(function (args, next) {
+	        _this2.block_size = 2 * 1024 * 1024;
+	        _this2._writer = new Sequential_Queue(function (args, next) {
 	            var block = args.block,
 	                socket = args.socket,
 	                bytes = args.bytes;
 
-	            var fileWriter = _this.fileWriter;
+	            var fileWriter = _this2.fileWriter;
 	            fileWriter.onwriteend = function () {
 	                socket.status = _status2.default.WAITING;
 	                block.status = _status2.default.DONE;
-	                _this._download();
+	                _this2._download();
 	                next();
-	                _this._maybe_is_ready();
+	                _this2._maybe_is_ready();
 	            };
-	            fileWriter.seek(block.offset);
-	            fileWriter.write(new Blob([bytes]));
-	        }, 1);
-	        return _this;
+	            _this2.decode_block(block.offset, bytes, function (err, _bytes) {
+	                fileWriter.write(new Blob([_bytes]));
+	            });
+	        });
+	        return _this2;
 	    }
 
-	    // _get_filesize() {{{
-
-
 	    _createClass(Download, [{
+	        key: 'decode_block',
+	        value: function decode_block(offset, bytes, next) {
+	            next(null, bytes);
+	        }
+
+	        // _get_filesize() {{{
+
+	    }, {
 	        key: '_get_filesize',
 	        value: function _get_filesize(xhr) {
 	            var size = xhr.getAllResponseHeaders().match(/content-length\s*:\s*(\d+)/i);
@@ -781,14 +823,9 @@ this["FileUploader"] =
 	        // }}}
 
 	    }, {
-	        key: '_write',
-	        value: function _write(block, socket, bytes) {
-	            this._writer.push({ block: block, socket: socket, bytes: bytes });
-	        }
-	    }, {
 	        key: '_download_block',
 	        value: function _download_block(block, socket) {
-	            var _this2 = this;
+	            var _this3 = this;
 
 	            var xhr = this._xhr('GET', {
 	                'pragma': 'no-cache',
@@ -798,13 +835,13 @@ this["FileUploader"] =
 	            xhr.getXhr().responseType = "arraybuffer";
 	            xhr.then(function (r) {
 	                block.downloaded = r.responseText.byteLength;
-	                _this2._write(block, socket, r.responseText);
+	                _this3._writer.push(block.id, { block: block, socket: socket, bytes: r.responseText });
 	            }).catch(function (r) {
 	                socket.status = _status2.default.WAITING; // release socket slot.
 	                block.status = _status2.default.WAITING;
 	                block.downloaded = 0;
-	                _this2.progress();
-	                _this2._download();
+	                _this3.progress();
+	                _this3._download();
 	            });
 	            xhr.send();
 	        }
@@ -832,12 +869,12 @@ this["FileUploader"] =
 	    }, {
 	        key: '_is_ready',
 	        value: function _is_ready() {
-	            var _this3 = this;
+	            var _this4 = this;
 
 	            this.fileEntry.file(function (file) {
-	                (0, _fileSaver.saveAs)(file, _this3.download_file_name);
+	                (0, _fileSaver.saveAs)(file, _this4.download_file_name);
 	            }, function (err) {
-	                return _this3._fs_error(err);
+	                return _this4._fs_error(err);
 	            });
 	        }
 	    }, {
@@ -882,36 +919,36 @@ this["FileUploader"] =
 	    }, {
 	        key: 'download',
 	        value: function download(download_file_name) {
-	            var _this4 = this;
+	            var _this5 = this;
 
 	            if (!download_file_name) {
 	                throw new Error("You must provide a file name for the download");
 	            }
 	            this.download_file_name = download_file_name;
 	            this._xhr('HEAD').send().then(function (r) {
-	                _this4.file_size = _this4._get_filesize(r.xhr);
-	                _this4._calculate_blocks();
+	                _this5.file_size = _this5._get_filesize(r.xhr);
+	                _this5._calculate_blocks();
 
 	                var requestFileSystem = window.requestFileSystem || window.webkitRequestFileSystem;
-	                requestFileSystem(window.TEMPORARY, _this4.file_size, function (fs) {
-	                    _this4.fs = fs;
-	                    fs.root.getFile((0, _sha256Min2.default)(_this4.url), { create: true }, function (fileEntry) {
-	                        _this4.fileEntry = fileEntry;
+	                requestFileSystem(window.TEMPORARY, _this5.file_size, function (fs) {
+	                    _this5.fs = fs;
+	                    fs.root.getFile((0, _sha256Min2.default)(_this5.url), { create: true }, function (fileEntry) {
+	                        _this5.fileEntry = fileEntry;
 
 	                        fileEntry.createWriter(function (writer) {
-	                            _this4.fileWriter = writer;
-	                            _this4.fileWriter.onerror = function (e) {
+	                            _this5.fileWriter = writer;
+	                            _this5.fileWriter.onerror = function (e) {
 	                                console.error('Write failed: ' + e.toString());
 	                            };
-	                            _this4._download();
+	                            _this5._download();
 	                        }, function (err) {
-	                            return _this4._fs_error(err);
+	                            return _this5._fs_error(err);
 	                        });
 	                    }, function (err) {
-	                        return _this4._fs_error(err);
+	                        return _this5._fs_error(err);
 	                    });
 	                }, function (err) {
-	                    return _this4._fs_error(err);
+	                    return _this5._fs_error(err);
 	                });
 	            });
 	        }
