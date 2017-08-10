@@ -761,6 +761,7 @@ this["FileUploader"] =
 	                block.status = _status2.default.DONE;
 	                _this._download();
 	                next();
+	                _this._maybe_is_ready();
 	            };
 	            fileWriter.seek(block.offset);
 	            fileWriter.write(new Blob([bytes]));
@@ -780,6 +781,11 @@ this["FileUploader"] =
 	        // }}}
 
 	    }, {
+	        key: '_write',
+	        value: function _write(block, socket, bytes) {
+	            this._writer.push({ block: block, socket: socket, bytes: bytes });
+	        }
+	    }, {
 	        key: '_download_block',
 	        value: function _download_block(block, socket) {
 	            var _this2 = this;
@@ -792,7 +798,7 @@ this["FileUploader"] =
 	            xhr.getXhr().responseType = "arraybuffer";
 	            xhr.then(function (r) {
 	                block.downloaded = r.responseText.byteLength;
-	                _this2._writer.push({ block: block, socket: socket, bytes: r.responseText });
+	                _this2._write(block, socket, r.responseText);
 	            }).catch(function (r) {
 	                socket.status = _status2.default.WAITING; // release socket slot.
 	                block.status = _status2.default.WAITING;
@@ -819,7 +825,7 @@ this["FileUploader"] =
 	                    }
 	                }
 	                if (!h) {
-	                    return this._maybe_is_ready();
+	                    break;
 	                }
 	            }
 	        }

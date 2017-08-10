@@ -16,6 +16,7 @@ export default class Download extends Client {
                 block.status  = Status.DONE;
                 this._download();
                 next();
+                this._maybe_is_ready();
             };
             fileWriter.seek(block.offset);
             fileWriter.write(new Blob([bytes]));
@@ -28,6 +29,10 @@ export default class Download extends Client {
         return parseInt(size[1]);
     }
     // }}}
+    
+    _write(block, socket, bytes) {
+        this._writer.push({block, socket, bytes})
+    }
 
     _download_block(block, socket) {
         let xhr = this._xhr('GET', {
@@ -38,7 +43,7 @@ export default class Download extends Client {
         xhr.getXhr().responseType = "arraybuffer";
         xhr.then(r => {
             block.downloaded = r.responseText.byteLength;
-            this._writer.push({block, socket, bytes: r.responseText})
+            this._write(block, socket, r.responseText);
         }).catch(r => {
             socket.status = Status.WAITING; // release socket slot.
             block.status = Status.WAITING
@@ -64,7 +69,7 @@ export default class Download extends Client {
                 }
             }
             if (!h) {
-                return this._maybe_is_ready();
+                break;
             }
         }
     }
