@@ -13,7 +13,7 @@
         }
     ],
     "minimum-stability": "stable",
-    "version": "v0.1.1",
+    "version": "v0.1.2",
     "require": {
         "crodas/concurrent-file-writer": ">=0.2.2"
     }
