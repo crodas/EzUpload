@@ -72,12 +72,13 @@ export default class Download extends Client {
         })
         xhr.getXhr().responseType = "arraybuffer";
         xhr.then(r => {
-            block.transfered = r.responseText.byteLength;
+            this.transfered += r.responseText.byteLength;
             this._writer.push(block.id, {block, socket, bytes: r.responseText});
+            this.progress();
         }).catch(r => {
             socket.status = Status.WAITING; // release socket slot.
             block.status = Status.WAITING
-            block.transfered = 0;
+            socket.transfered = 0;
             this.progress();
             this._download();
         });

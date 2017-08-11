@@ -147,7 +147,7 @@ export default class Upload extends Client {
             }
 
             block.status = Status.DONE;
-            block.transfered = block.blob.byteLength;
+            this.transfered += block.blob.byteLength;
             block.blob = null; // release memory
 
             socket.status = Status.WAITING; // release socket slot.
@@ -157,12 +157,12 @@ export default class Upload extends Client {
         }).catch(r => {
             socket.status = Status.WAITING; // release socket slot.
             block.status = Status.WAITING
-            block.transfered = 0;
+            socket.transfered = 0;
             this.progress();
             this._upload_next_block();
         });
         xhr.upload.onprogress = e => {
-            block.transfered = e.loaded;
+            socket.transfered = e.loaded;
             this.progress();
         };
         xhr.send(new Uint8Array(block.blob));

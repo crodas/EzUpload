@@ -346,7 +346,7 @@ this["FileUploader"] =
 	                }
 
 	                block.status = _status2.default.DONE;
-	                block.transfered = block.blob.byteLength;
+	                _this4.transfered += block.blob.byteLength;
 	                block.blob = null; // release memory
 
 	                socket.status = _status2.default.WAITING; // release socket slot.
@@ -356,12 +356,12 @@ this["FileUploader"] =
 	            }).catch(function (r) {
 	                socket.status = _status2.default.WAITING; // release socket slot.
 	                block.status = _status2.default.WAITING;
-	                block.transfered = 0;
+	                socket.transfered = 0;
 	                _this4.progress();
 	                _this4._upload_next_block();
 	            });
 	            xhr.upload.onprogress = function (e) {
-	                block.transfered = e.loaded;
+	                socket.transfered = e.loaded;
 	                _this4.progress();
 	            };
 	            xhr.send(new Uint8Array(block.blob));
@@ -420,6 +420,8 @@ this["FileUploader"] =
 
 	        _this.url = url;
 
+	        _this.transfered = 0;
+
 	        // The file is split into blocks which are uploaded. This is a "map"
 	        // which contains information about the file block. We just read up to
 	        // 4 blocks at a time. So at most we would have 4MB of a file in RAM at
@@ -448,6 +450,7 @@ this["FileUploader"] =
 	        value: function _get_free_socket() {
 	            for (var i = 0; i < this.sockets.length; ++i) {
 	                if (this.sockets[i].status === _status2.default.WAITING) {
+	                    this.sockets[i].transfered = 0;
 	                    return this.sockets[i];
 	                }
 	            }
@@ -457,11 +460,12 @@ this["FileUploader"] =
 	    }, {
 	        key: 'progress',
 	        value: function progress() {
-	            this.emit('progress', this.file_size, this.blocks.map(function (m) {
-	                return m.transfered;
+	            var transfered = this.sockets.map(function (m) {
+	                return m.status == _status2.default.WAITING ? 0 : m.transfered;
 	            }).reduce(function (a, b) {
 	                return a + b;
-	            }, 0));
+	            }, 0);
+	            this.emit('progress', this.file_size, transfered + this.transfered);
 	        }
 	    }, {
 	        key: '_calculate_blocks',
@@ -847,12 +851,13 @@ this["FileUploader"] =
 	            });
 	            xhr.getXhr().responseType = "arraybuffer";
 	            xhr.then(function (r) {
-	                block.transfered = r.responseText.byteLength;
+	                _this3.transfered += r.responseText.byteLength;
 	                _this3._writer.push(block.id, { block: block, socket: socket, bytes: r.responseText });
+	                _this3.progress();
 	            }).catch(function (r) {
 	                socket.status = _status2.default.WAITING; // release socket slot.
 	                block.status = _status2.default.WAITING;
-	                block.transfered = 0;
+	                socket.transfered = 0;
 	                _this3.progress();
 	                _this3._download();
 	            });

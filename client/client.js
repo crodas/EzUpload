@@ -15,6 +15,8 @@ export default class Client extends Event {
 
         this.url = url;
 
+        this.transfered = 0;
+
         // The file is split into blocks which are uploaded. This is a "map"
         // which contains information about the file block. We just read up to
         // 4 blocks at a time. So at most we would have 4MB of a file in RAM at
@@ -38,6 +40,7 @@ export default class Client extends Event {
     _get_free_socket() {
         for (let i=0; i < this.sockets.length; ++i) {
             if (this.sockets[i].status === Status.WAITING) {
+                this.sockets[i].transfered = 0;
                 return this.sockets[i];
             }
         }
@@ -46,7 +49,9 @@ export default class Client extends Event {
     }
 
     progress() {
-        this.emit('progress', this.file_size, this.blocks.map(m => m.transfered).reduce((a, b) => a+b, 0));
+        let transfered = this.sockets.map(m => m.status == Status.WAITING ? 0 : m.transfered)
+            .reduce((a, b) => a+b, 0);
+        this.emit('progress', this.file_size, transfered + this.transfered);
     }
 
     _calculate_blocks() {
