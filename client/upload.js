@@ -129,10 +129,6 @@ export default class Upload extends Client {
         }
     }
 
-    progress() {
-        this.emit('progress', this.file_size, this.blocks.map(m => m.uploaded).reduce((a, b) => a+b, 0));
-    }
-
     _upload_block(socket, block) {
         let xhr = this._xhr('PUT', {
             'Content-Type': 'application/binary',
@@ -151,7 +147,7 @@ export default class Upload extends Client {
             }
 
             block.status = Status.DONE;
-            block.uploaded = block.blob.byteLength;
+            block.transfered = block.blob.byteLength;
             block.blob = null; // release memory
 
             socket.status = Status.WAITING; // release socket slot.
@@ -161,12 +157,12 @@ export default class Upload extends Client {
         }).catch(r => {
             socket.status = Status.WAITING; // release socket slot.
             block.status = Status.WAITING
-            block.uploaded = 0;
+            block.transfered = 0;
             this.progress();
             this._upload_next_block();
         });
         xhr.upload.onprogress = e => {
-            block.uploaded = e.loaded;
+            block.transfered = e.loaded;
             this.progress();
         };
         xhr.send(new Uint8Array(block.blob));

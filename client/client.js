@@ -6,6 +6,9 @@ if (typeof Promise !== "function") {
     throw new Error("This browser does not have any promisse. Please load bluebird first");
 }
 
+const MIN_BLOCK_SIZE = 128 * 1024;
+const MAX_BLOCK_SIZE = 1024 * 1024 * 5;
+
 export default class Client extends Event {
     constructor(url) {
         super()
@@ -42,25 +45,38 @@ export default class Client extends Event {
         return false;
     }
 
-    _calculate_blocks() {
-        let pos = 0;
-        this.blocks = Array(Math.ceil(this.file_size / this.block_size)).fill(1)
-            .map(() => {
-                let offset = pos * this.block_size;
-                let end = Math.min(++pos * this.block_size, this.file_size);
-                return {
-                    id: pos - 1,
-                    status: Status.WAITING,
-                    offset,
-                    end,
-                    size: end - offset,
-                    uploaded: 0,
-                    blob: null,
+    progress() {
+        this.emit('progress', this.file_size, this.blocks.map(m => m.transfered).reduce((a, b) => a+b, 0));
+    }
 
-                    real_offset: null,
-                    real_size: null,
-                };
-            })
+    _calculate_blocks() {
+        let id = 0;
+        let bytes = 0;
+        let blocks = [];
+        for (let i = 1; i <= 8 && bytes <= this.file_size - i * MIN_BLOCK_SIZE; ++i) {
+            blocks.push({
+                offset: bytes,
+                end: i * MIN_BLOCK_SIZE,
+            });
+            bytes = MIN_BLOCK_SIZE * i;
+        }
+
+        while (bytes < this.file_size) {
+            blocks.push({ offset: bytes, end: bytes + MAX_BLOCK_SIZE});
+            bytes += MAX_BLOCK_SIZE;
+        }
+
+        this.blocks = blocks.map(v => {
+            v.id = id++;
+            v.end  = Math.min(v.end, this.file_size);
+            v.size = v.end - v.offset;
+            v.blob = null;
+            v.transfered = 0;
+            v.status = Status.WAITING;
+            v.real_offset = null;
+            v.real_size = null;
+            return v;
+        });
     }
 
     _is_ready() {

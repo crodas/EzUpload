@@ -325,15 +325,6 @@ this["FileUploader"] =
 	            }
 	        }
 	    }, {
-	        key: 'progress',
-	        value: function progress() {
-	            this.emit('progress', this.file_size, this.blocks.map(function (m) {
-	                return m.uploaded;
-	            }).reduce(function (a, b) {
-	                return a + b;
-	            }, 0));
-	        }
-	    }, {
 	        key: '_upload_block',
 	        value: function _upload_block(socket, block) {
 	            var _this4 = this;
@@ -355,7 +346,7 @@ this["FileUploader"] =
 	                }
 
 	                block.status = _status2.default.DONE;
-	                block.uploaded = block.blob.byteLength;
+	                block.transfered = block.blob.byteLength;
 	                block.blob = null; // release memory
 
 	                socket.status = _status2.default.WAITING; // release socket slot.
@@ -365,12 +356,12 @@ this["FileUploader"] =
 	            }).catch(function (r) {
 	                socket.status = _status2.default.WAITING; // release socket slot.
 	                block.status = _status2.default.WAITING;
-	                block.uploaded = 0;
+	                block.transfered = 0;
 	                _this4.progress();
 	                _this4._upload_next_block();
 	            });
 	            xhr.upload.onprogress = function (e) {
-	                block.uploaded = e.loaded;
+	                block.transfered = e.loaded;
 	                _this4.progress();
 	            };
 	            xhr.send(new Uint8Array(block.blob));
@@ -415,6 +406,9 @@ this["FileUploader"] =
 	if (typeof Promise !== "function") {
 	    throw new Error("This browser does not have any promisse. Please load bluebird first");
 	}
+
+	var MIN_BLOCK_SIZE = 128 * 1024;
+	var MAX_BLOCK_SIZE = 1024 * 1024 * 5;
 
 	var Client = function (_Event) {
 	    _inherits(Client, _Event);
@@ -461,26 +455,45 @@ this["FileUploader"] =
 	            return false;
 	        }
 	    }, {
+	        key: 'progress',
+	        value: function progress() {
+	            this.emit('progress', this.file_size, this.blocks.map(function (m) {
+	                return m.transfered;
+	            }).reduce(function (a, b) {
+	                return a + b;
+	            }, 0));
+	        }
+	    }, {
 	        key: '_calculate_blocks',
 	        value: function _calculate_blocks() {
 	            var _this2 = this;
 
-	            var pos = 0;
-	            this.blocks = Array(Math.ceil(this.file_size / this.block_size)).fill(1).map(function () {
-	                var offset = pos * _this2.block_size;
-	                var end = Math.min(++pos * _this2.block_size, _this2.file_size);
-	                return {
-	                    id: pos - 1,
-	                    status: _status2.default.WAITING,
-	                    offset: offset,
-	                    end: end,
-	                    size: end - offset,
-	                    uploaded: 0,
-	                    blob: null,
+	            var id = 0;
+	            var bytes = 0;
+	            var blocks = [];
+	            for (var i = 1; i <= 8 && bytes <= this.file_size - i * MIN_BLOCK_SIZE; ++i) {
+	                blocks.push({
+	                    offset: bytes,
+	                    end: i * MIN_BLOCK_SIZE
+	                });
+	                bytes = MIN_BLOCK_SIZE * i;
+	            }
 
-	                    real_offset: null,
-	                    real_size: null
-	                };
+	            while (bytes < this.file_size) {
+	                blocks.push({ offset: bytes, end: bytes + MAX_BLOCK_SIZE });
+	                bytes += MAX_BLOCK_SIZE;
+	            }
+
+	            this.blocks = blocks.map(function (v) {
+	                v.id = id++;
+	                v.end = Math.min(v.end, _this2.file_size);
+	                v.size = v.end - v.offset;
+	                v.blob = null;
+	                v.transfered = 0;
+	                v.status = _status2.default.WAITING;
+	                v.real_offset = null;
+	                v.real_size = null;
+	                return v;
 	            });
 	        }
 	    }, {
@@ -834,12 +847,12 @@ this["FileUploader"] =
 	            });
 	            xhr.getXhr().responseType = "arraybuffer";
 	            xhr.then(function (r) {
-	                block.downloaded = r.responseText.byteLength;
+	                block.transfered = r.responseText.byteLength;
 	                _this3._writer.push(block.id, { block: block, socket: socket, bytes: r.responseText });
 	            }).catch(function (r) {
 	                socket.status = _status2.default.WAITING; // release socket slot.
 	                block.status = _status2.default.WAITING;
-	                block.downloaded = 0;
+	                block.transfered = 0;
 	                _this3.progress();
 	                _this3._download();
 	            });
@@ -906,15 +919,6 @@ this["FileUploader"] =
 	            };
 
 	            this.emit('error', msg);
-	        }
-	    }, {
-	        key: 'progress',
-	        value: function progress() {
-	            this.emit('progress', this.file_size, this.blocks.map(function (m) {
-	                return m.downloaded;
-	            }).reduce(function (a, b) {
-	                return a + b;
-	            }, 0));
 	        }
 	    }, {
 	        key: 'download',

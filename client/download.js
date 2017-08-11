@@ -72,12 +72,12 @@ export default class Download extends Client {
         })
         xhr.getXhr().responseType = "arraybuffer";
         xhr.then(r => {
-            block.downloaded = r.responseText.byteLength;
+            block.transfered = r.responseText.byteLength;
             this._writer.push(block.id, {block, socket, bytes: r.responseText});
         }).catch(r => {
             socket.status = Status.WAITING; // release socket slot.
             block.status = Status.WAITING
-            block.downloaded = 0;
+            block.transfered = 0;
             this.progress();
             this._download();
         });
@@ -138,11 +138,6 @@ export default class Download extends Client {
 
         this.emit('error', msg);
     }
-
-    progress() {
-        this.emit('progress', this.file_size, this.blocks.map(m => m.downloaded).reduce((a, b) => a+b, 0));
-    }
-
 
     download(download_file_name) {
         if (!download_file_name) {
