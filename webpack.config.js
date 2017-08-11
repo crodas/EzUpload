@@ -1,18 +1,21 @@
 var path = require('path');
+var nodeExternals = require('webpack-node-externals');
 var webpack = require('webpack');
 
 var config = {
-     entry: './client/upload',
-     output: {
+    entry: './client/index',
+    output: {
          path: __dirname,
-         filename: 'dist/upload.js',
+         filename: 'dist/ezupload.js',
          library: ['FileUploader'],
+         libraryTarget: 'this',
      },
-     module: {
+    target: 'node',
+    module: {
          loaders: [{
              test: /\.js$/,
              loader: 'babel-loader',
-             exclude: /node_modules/i,
+             exclude: /node_modules|sha256/i,
              query: {
                  presets: ['stage-2', 'es2015', 'stage-0']
              }    

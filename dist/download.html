@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta http-equiv="content-type" content="text/html; charset=utf-8">
-    <title>File Upload</title>
+    <title>File Download</title>
     <link href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-BVYiiSIFeK1dGmJRAkycuHAHRg32OmUcww7on3RYdg4Va+PmSTsz/K68vbdEjh4u" crossorigin="anonymous">
 </head>
 <body>
@@ -10,9 +10,10 @@
 <div class="row">
   <div class="col-lg-6">
     <div class="input-group">
-      <input type="file" id="file" class="form-control" placeholder="Search for...">
+      <input type="text" id="url" class="form-control" placeholder="URL to download.">
+      <input type="text" id="name" class="form-control" placeholder="Name">
       <span class="input-group-btn">
-        <button id="upload" class="btn btn-default disabled" type="button">Upload</button>
+        <button id="upload" class="btn btn-default" type="button">Download</button>
       </span>
     </div><!-- /input-group -->
 
@@ -30,33 +31,31 @@
         src="https://code.jquery.com/jquery-3.2.1.min.js"
         integrity="sha256-hwg4gsxgFZhOsEEamdOYGBf13FyQuiTwlAQgxVSNgt4="
         crossorigin="anonymous"></script>
-</div>
-<script>
-$('#file').on('change', function(evt) {
-    var files = evt.target.files; // FileList object
+    <script>
+    var getUrlParameter = function getUrlParameter(sParam) {
+    var sPageURL = decodeURIComponent(window.location.search.substring(1)),
+        sURLVariables = sPageURL.split('&'),
+        sParameterName,
+        i;
 
-    // files is a FileList of File objects. List some properties.
-    var uploader = [];
-    for (var i = 0, file; file = files[i]; i++) {
-        uploader.push(new FileUploader.Upload(file, "./upload.php"));
+    for (i = 0; i < sURLVariables.length; i++) {
+        sParameterName = sURLVariables[i].split('=');
+
+        if (sParameterName[0] === sParam) {
+            return sParameterName[1] === undefined ? true : sParameterName[1];
+        }
     }
-
-    $('#upload').removeClass('disabled').unbind('click').bind('click', function() {
-        uploader[0].on('post', function(d) {
-            d.cesar = 'hi';
-        });
-        uploader[0].on('end', function(err, r, that) {
-            alert("Upload finished successfully. We are redirecting to the download page now");
-            document.location.href="./download.html?url=" + encodeURIComponent("/store/" + that.file_id) + "&name=" + encodeURIComponent(r.name);
-        });
-        uploader[0].upload();
-        uploader[0].on('progress', function(size, done) {
+};
+    $('input#url').val(getUrlParameter('url'));
+    $('input#name').val(getUrlParameter('name'));
+    $('button').click(function() {
+        var x = new FileUploader.Download($('input#url').val());
+        x.on('progress', function(size, done) {
             $('.progress-bar').css('width', (done/size * 100) + '%')
                 .attr('aria-valuenow', done/size*100)
         });
+        x.download($('input#name').val());
     });
-
-});
-</script>
-</body>
+    </script>
+    </body>
 </html>

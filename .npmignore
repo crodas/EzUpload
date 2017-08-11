@@ -1,0 +1,9 @@
+src
+client
+node_modules
+composer\*
+vendor
+dist/*.html
+dist/sha256.min.js
+dist/upload.js
+*.php

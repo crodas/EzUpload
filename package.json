@@ -1,8 +1,8 @@
 {
-  "name": "enigma",
-  "version": "1.0.0",
+  "name": "ezupload",
+  "version": "0.2.4",
   "description": "",
-  "main": "index.js",
+  "main": "dist/ezupload.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
@@ -17,9 +17,11 @@
     "babel-preset-es2015": "^6.9.0",
     "babel-preset-stage-0": "^6.5.0",
     "clipboard": "^1.6.1",
+    "file-saver": "^1.3.3",
     "jsonful": "^0.4.1",
     "tiny-emitter": "^2.0.1",
     "webpack": "^1.13.1",
+    "webpack-node-externals": "^1.6.0",
     "webpack-preset": "^0.2.0",
     "webpack-preset-babel": "^0.2.0",
     "webpack-preset-babel-stage-2": "^0.2.0",
