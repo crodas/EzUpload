@@ -21,7 +21,7 @@ export default class Client extends Event {
         // which contains information about the file block. We just read up to
         // 4 blocks at a time. So at most we would have 4MB of a file in RAM at
         // most.
-        this.blocks = [];
+        this.blocks = null;
 
         // "Sockets". This is not really any socket, just an array which represents
         // a request which is going on.
@@ -58,6 +58,21 @@ export default class Client extends Event {
         let id = 0;
         let bytes = 0;
         let blocks = [];
+
+        if (this.blocks !== null) {
+            this.blocks = this.blocks.map(v => {
+                v.id = id++;
+                v.size = v.end - v.offset;
+                v.blob = null;
+                v.transfered = 0;
+                v.status = Status.WAITING;
+                v.real_offset = null;
+                v.real_size = null;
+                return v;
+            });
+            return;
+        }
+
         for (let i = 1; i <= 8 && bytes <= this.file_size - i * MIN_BLOCK_SIZE; ++i) {
             blocks.push({
                 offset: bytes,
@@ -98,9 +113,9 @@ export default class Client extends Event {
         return true;
     }
 
-    _xhr(action, headers = {}) {
+    _xhr(action, headers = {}, url = this.url) {
         let xhr = new XMLHttpRequest;
-        xhr.open(action, this.url, true);
+        xhr.open(action, url, true);
         if (this.file_id) {
             headers['X-FILE-ID'] = this.file_id;
         }

@@ -1,4 +1,5 @@
 src
+*.tgz
 client
 node_modules
 composer\*

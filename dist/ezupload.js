@@ -153,6 +153,8 @@ this["FileUploader"] =
 	    value: true
 	});
 
+	var _typeof = typeof Symbol === "function" && typeof Symbol.iterator === "symbol" ? function (obj) { return typeof obj; } : function (obj) { return obj && typeof Symbol === "function" && obj.constructor === Symbol && obj !== Symbol.prototype ? "symbol" : typeof obj; };
+
 	var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
 
 	var _queue = __webpack_require__(1);
@@ -197,12 +199,6 @@ this["FileUploader"] =
 	        _this.url = url;
 	        _this.max_block_size = 1024 * 1024;
 	        _this.file_size = file.size;
-
-	        // The file is split into blocks which are uploaded. This is a "map"
-	        // which contains information about the file block. We just read up to
-	        // 4 blocks at a time. So at most we would have 4MB of a file in RAM
-	        // most.
-	        _this.blocks = [];
 
 	        _this.file_reader = new _queue2.default(function (args, next) {
 	            var socket = args.socket,
@@ -292,7 +288,13 @@ this["FileUploader"] =
 	                if (typeof response.block_limit === "number") {
 	                    _this3.block_size = Math.min(parseInt(response.block_limit), _this3.max_block_size);
 	                }
+
+	                if (_typeof(response.blocks) === "object" && response.blocks instanceof Array) {
+	                    _this3.blocks = response.blocks;
+	                }
+
 	                _this3.file_id = response.file_id;
+	                _this3.response = response;
 	                _this3._begin_upload();
 	            });
 	        }
@@ -333,7 +335,7 @@ this["FileUploader"] =
 	                'Content-Type': 'application/binary',
 	                'X-HASH': this.hash.apply(null, [block.blob]),
 	                'X-OFFSET': block.real_offset
-	            });
+	            }, block.url || this.url);
 	            socket.status = _status2.default.BUSY;
 	            block.status = _status2.default.UPLOAD;
 	            xhr.then(function (result) {
@@ -426,7 +428,7 @@ this["FileUploader"] =
 	        // which contains information about the file block. We just read up to
 	        // 4 blocks at a time. So at most we would have 4MB of a file in RAM at
 	        // most.
-	        _this.blocks = [];
+	        _this.blocks = null;
 
 	        // "Sockets". This is not really any socket, just an array which represents
 	        // a request which is going on.
@@ -475,6 +477,21 @@ this["FileUploader"] =
 	            var id = 0;
 	            var bytes = 0;
 	            var blocks = [];
+
+	            if (this.blocks !== null) {
+	                this.blocks = this.blocks.map(function (v) {
+	                    v.id = id++;
+	                    v.size = v.end - v.offset;
+	                    v.blob = null;
+	                    v.transfered = 0;
+	                    v.status = _status2.default.WAITING;
+	                    v.real_offset = null;
+	                    v.real_size = null;
+	                    return v;
+	                });
+	                return;
+	            }
+
 	            for (var i = 1; i <= 8 && bytes <= this.file_size - i * MIN_BLOCK_SIZE; ++i) {
 	                blocks.push({
 	                    offset: bytes,
@@ -520,9 +537,10 @@ this["FileUploader"] =
 	        key: '_xhr',
 	        value: function _xhr(action) {
 	            var headers = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {};
+	            var url = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : this.url;
 
 	            var xhr = new XMLHttpRequest();
-	            xhr.open(action, this.url, true);
+	            xhr.open(action, url, true);
 	            if (this.file_id) {
 	                headers['X-FILE-ID'] = this.file_id;
 	            }

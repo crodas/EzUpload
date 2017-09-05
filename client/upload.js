@@ -15,12 +15,6 @@ export default class Upload extends Client {
         this.max_block_size = 1024 * 1024;
         this.file_size  = file.size;
 
-        // The file is split into blocks which are uploaded. This is a "map"
-        // which contains information about the file block. We just read up to
-        // 4 blocks at a time. So at most we would have 4MB of a file in RAM
-        // most.
-        this.blocks = [];
-
         this.file_reader = new Queue((args, next) => {
             let {socket, block} = args;
 
@@ -98,7 +92,13 @@ export default class Upload extends Client {
             if (typeof response.block_limit === "number") {
                 this.block_size = Math.min(parseInt(response.block_limit), this.max_block_size);
             }
-            this.file_id = response.file_id;
+
+            if (typeof response.blocks === "object" && response.blocks instanceof Array) {
+                this.blocks = response.blocks;
+            }
+
+            this.file_id  = response.file_id;
+            this.response = response;
             this._begin_upload();
         });
     }
@@ -134,7 +134,7 @@ export default class Upload extends Client {
             'Content-Type': 'application/binary',
             'X-HASH':  this.hash.apply(null, [block.blob]),
             'X-OFFSET': block.real_offset,
-        })
+        }, block.url || this.url);
         socket.status = Status.BUSY;
         block.status  = Status.UPLOAD;
         xhr.then(result => {
