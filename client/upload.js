@@ -64,9 +64,9 @@ export default class Upload extends Client {
         this.finalize_upload(args, (err) => {
             this._do_post(args)
                 .then(r => {
-                    let response = JSON.parse(r.responseText);
+                    let response = this.parse_response(r);
                     this.progress();
-                    this.emit('end', !response.success, response.response, this);
+                    this.emit('end', true, response, this);
                 });
         });
     }
@@ -79,16 +79,8 @@ export default class Upload extends Client {
             lastModified: this.file.lastModified,
             action: 'begin-upload',
         }).then(results => {
-            if (results.status !== 200) {
-                throw new Error('request failed');
-            }
+            let response = this.parse_response(results);
 
-            let response = results.responseText;
-            if (typeof response === "string") {
-                response = JSON.parse(response);
-            }
-
-            response = response.response;
             if (typeof response.block_limit === "number") {
                 this.block_size = Math.min(parseInt(response.block_limit), this.max_block_size);
             }
@@ -138,13 +130,7 @@ export default class Upload extends Client {
         socket.status = Status.BUSY;
         block.status  = Status.UPLOAD;
         xhr.then(result => {
-            let response = result.responseText;
-            if (typeof response === "string") {
-                response = JSON.parse(response);
-            }
-            if (result.status !== 200 || !response || !response.success) {
-                throw new Error('internal error');
-            }
+            let response = this.parse_response(result);
 
             block.status = Status.DONE;
             this.transfered += block.blob.byteLength;

@@ -103,6 +103,19 @@ export default class Client extends Event {
         throw new Error("_is_ready() must be override");
     }
 
+    parse_response(result) {
+        let response = result.responseText;
+        if (typeof response === "string") {
+            response = JSON.parse(response);
+        }
+
+        if (result.status !== 200 || !response || !response.success) {
+            throw new Error('internal error');
+        }
+
+        return response.response;
+    }
+
     _maybe_is_ready() {
         for (let i=0; i < this.sockets.length; ++i) {
             if (this.sockets[i].status !== Status.WAITING) {

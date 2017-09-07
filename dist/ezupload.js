@@ -257,9 +257,9 @@ this["FileUploader"] =
 
 	            this.finalize_upload(args, function (err) {
 	                _this2._do_post(args).then(function (r) {
-	                    var response = JSON.parse(r.responseText);
+	                    var response = _this2.parse_response(r);
 	                    _this2.progress();
-	                    _this2.emit('end', !response.success, response.response, _this2);
+	                    _this2.emit('end', true, response, _this2);
 	                });
 	            });
 	        }
@@ -275,16 +275,8 @@ this["FileUploader"] =
 	                lastModified: this.file.lastModified,
 	                action: 'begin-upload'
 	            }).then(function (results) {
-	                if (results.status !== 200) {
-	                    throw new Error('request failed');
-	                }
+	                var response = _this3.parse_response(results);
 
-	                var response = results.responseText;
-	                if (typeof response === "string") {
-	                    response = JSON.parse(response);
-	                }
-
-	                response = response.response;
 	                if (typeof response.block_limit === "number") {
 	                    _this3.block_size = Math.min(parseInt(response.block_limit), _this3.max_block_size);
 	                }
@@ -339,13 +331,7 @@ this["FileUploader"] =
 	            socket.status = _status2.default.BUSY;
 	            block.status = _status2.default.UPLOAD;
 	            xhr.then(function (result) {
-	                var response = result.responseText;
-	                if (typeof response === "string") {
-	                    response = JSON.parse(response);
-	                }
-	                if (result.status !== 200 || !response || !response.success) {
-	                    throw new Error('internal error');
-	                }
+	                var response = _this4.parse_response(result);
 
 	                block.status = _status2.default.DONE;
 	                _this4.transfered += block.blob.byteLength;
@@ -521,6 +507,20 @@ this["FileUploader"] =
 	        key: '_is_ready',
 	        value: function _is_ready() {
 	            throw new Error("_is_ready() must be override");
+	        }
+	    }, {
+	        key: 'parse_response',
+	        value: function parse_response(result) {
+	            var response = result.responseText;
+	            if (typeof response === "string") {
+	                response = JSON.parse(response);
+	            }
+
+	            if (result.status !== 200 || !response || !response.success) {
+	                throw new Error('internal error');
+	            }
+
+	            return response.response;
 	        }
 	    }, {
 	        key: '_maybe_is_ready',
