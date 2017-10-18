@@ -1193,6 +1193,14 @@ this["FileUploader"] =
 	        var _this = _possibleConstructorReturn(this, (File.__proto__ || Object.getPrototypeOf(File)).call(this));
 
 	        var requestFileSystem = window.requestFileSystem || window.webkitRequestFileSystem;
+	        if (typeof requestFileSystem !== "function") {
+	            var _ret;
+
+	            return _ret = setTimeout(function () {
+	                return _this.emit('error', 'SECURITY_ERR');
+	            }), _possibleConstructorReturn(_this, _ret);
+	        }
+
 	        requestFileSystem(window.TEMPORARY, size, function (fs) {
 	            _this.fs = fs;
 	            fs.root.getFile(id, { create: true }, function (fileEntry) {

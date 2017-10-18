@@ -3,7 +3,11 @@ import Event from 'tiny-emitter';
 export default class File extends Event {
     constructor(id, size) {
         super();
-        let requestFileSystem  = (window.requestFileSystem || window.webkitRequestFileSystem);
+        let requestFileSystem = (window.requestFileSystem || window.webkitRequestFileSystem);
+        if (typeof requestFileSystem !== "function") {
+            return setTimeout(() => this.emit('error', 'SECURITY_ERR'));
+        }
+
         requestFileSystem(
             window.TEMPORARY,
             size,
