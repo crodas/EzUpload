@@ -1,6 +1,8 @@
 import Status from './status'
 import Client from './client';
 import {saveAs} from 'file-saver'
+import File from './file';
+import Memory from './file-memory';
 import sha256 from './sha256.min.js'
 
 class Sequential_Queue {
@@ -40,15 +42,15 @@ export default class Download extends Client {
         this._writer = new Sequential_Queue((args, next) => {
             let {block, socket, bytes} = args;
             let fileWriter = this.fileWriter;
-            fileWriter.onwriteend = () => {
+            fileWriter.once('wrote', () => {
                 socket.status = Status.WAITING;
                 block.status  = Status.DONE;
                 this._download();
                 next();
                 this._maybe_is_ready();
-            };
+            });
             this.decode_block(block.offset, bytes, (err, _bytes) => {
-                fileWriter.write(new Blob([_bytes]));
+                fileWriter.write(_bytes);
             });
         });
     }
@@ -106,38 +108,9 @@ export default class Download extends Client {
     }
 
     _is_ready() {
-        this.fileEntry.file(file => {
+        this.fileWriter.finalize(file => {
             saveAs(file, this.download_file_name);
-        }, err => this._fs_error(err));
-    }
-
-    _fs_error(e) {
-        var msg = '';
-
-        let FileError = window.FileError || window.DOMException;
-
-        switch (e.code) {
-        case FileError.QUOTA_EXCEEDED_ERR:
-            msg = 'QUOTA_EXCEEDED_ERR';
-            break;
-        case FileError.NOT_FOUND_ERR:
-            msg = 'NOT_FOUND_ERR';
-            break;
-        case FileError.SECURITY_ERR:
-            msg = 'SECURITY_ERR';
-            break;
-        case FileError.INVALID_MODIFICATION_ERR:
-            msg = 'INVALID_MODIFICATION_ERR';
-            break;
-        case FileError.INVALID_STATE_ERR:
-            msg = 'INVALID_STATE_ERR';
-            break;
-        default:
-            msg = 'Unknown Error';
-            break;
-        };
-
-        this.emit('error', msg);
+        });
     }
 
     download(download_file_name) {
@@ -150,28 +123,19 @@ export default class Download extends Client {
             .then(r => {
                 this.file_size = this._get_filesize(r.xhr);
                 this._calculate_blocks();
+                console.error(this.blocks);
 
-                let requestFileSystem  = (window.requestFileSystem || window.webkitRequestFileSystem);
-                requestFileSystem(
-                    window.TEMPORARY,
-                    this.file_size,
-                    fs => {
-                        this.fs = fs;
-                        fs.root.getFile(sha256(this.url), {create: true}, fileEntry => {
-                            this.fileEntry = fileEntry;
-
-                            fileEntry.createWriter(writer => {
-                                this.fileWriter = writer;
-                                this.fileWriter.onerror = function(e) {
-                                    console.error('Write failed: ' + e.toString());
-                                };
-                                this._download();
-                            }, err => this._fs_error(err));
-
-                        }, err => this._fs_error(err));
-                    },
-                    err => this._fs_error(err)
-                );
+                this.fileWriter = new File(sha256(this.url), this.file_size);
+                this.fileWriter.on('ready', () => this._download());
+                this.fileWriter.on('error', (e) => {
+                    if (e === 'SECURITY_ERR') {
+                        this.fileWriter = new Memory(sha256(this.url), this.file_size);
+                        this.fileWriter.on('ready', () => this._download());
+                        this.fileWriter.on('error', (e) => this.emit('error', e));
+                        return;
+                    }
+                    this.emit('error', e);
+                });
             });
 
     }

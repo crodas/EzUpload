@@ -1,6 +1,6 @@
 {
   "name": "ezupload",
-  "version": "0.2.6",
+  "version": "0.2.7",
   "description": "",
   "main": "dist/ezupload.js",
   "scripts": {

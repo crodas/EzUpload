@@ -757,6 +757,14 @@ this["FileUploader"] =
 
 	var _fileSaver = __webpack_require__(12);
 
+	var _file = __webpack_require__(14);
+
+	var _file2 = _interopRequireDefault(_file);
+
+	var _fileMemory = __webpack_require__(15);
+
+	var _fileMemory2 = _interopRequireDefault(_fileMemory);
+
 	var _sha256Min = __webpack_require__(7);
 
 	var _sha256Min2 = _interopRequireDefault(_sha256Min);
@@ -827,15 +835,15 @@ this["FileUploader"] =
 	                bytes = args.bytes;
 
 	            var fileWriter = _this2.fileWriter;
-	            fileWriter.onwriteend = function () {
+	            fileWriter.once('wrote', function () {
 	                socket.status = _status2.default.WAITING;
 	                block.status = _status2.default.DONE;
 	                _this2._download();
 	                next();
 	                _this2._maybe_is_ready();
-	            };
+	            });
 	            _this2.decode_block(block.offset, bytes, function (err, _bytes) {
-	                fileWriter.write(new Blob([_bytes]));
+	                fileWriter.write(_bytes);
 	            });
 	        });
 	        return _this2;
@@ -907,41 +915,9 @@ this["FileUploader"] =
 	        value: function _is_ready() {
 	            var _this4 = this;
 
-	            this.fileEntry.file(function (file) {
+	            this.fileWriter.finalize(function (file) {
 	                (0, _fileSaver.saveAs)(file, _this4.download_file_name);
-	            }, function (err) {
-	                return _this4._fs_error(err);
 	            });
-	        }
-	    }, {
-	        key: '_fs_error',
-	        value: function _fs_error(e) {
-	            var msg = '';
-
-	            var FileError = window.FileError || window.DOMException;
-
-	            switch (e.code) {
-	                case FileError.QUOTA_EXCEEDED_ERR:
-	                    msg = 'QUOTA_EXCEEDED_ERR';
-	                    break;
-	                case FileError.NOT_FOUND_ERR:
-	                    msg = 'NOT_FOUND_ERR';
-	                    break;
-	                case FileError.SECURITY_ERR:
-	                    msg = 'SECURITY_ERR';
-	                    break;
-	                case FileError.INVALID_MODIFICATION_ERR:
-	                    msg = 'INVALID_MODIFICATION_ERR';
-	                    break;
-	                case FileError.INVALID_STATE_ERR:
-	                    msg = 'INVALID_STATE_ERR';
-	                    break;
-	                default:
-	                    msg = 'Unknown Error';
-	                    break;
-	            };
-
-	            this.emit('error', msg);
 	        }
 	    }, {
 	        key: 'download',
@@ -955,27 +931,24 @@ this["FileUploader"] =
 	            this._xhr('HEAD').send().then(function (r) {
 	                _this5.file_size = _this5._get_filesize(r.xhr);
 	                _this5._calculate_blocks();
+	                console.error(_this5.blocks);
 
-	                var requestFileSystem = window.requestFileSystem || window.webkitRequestFileSystem;
-	                requestFileSystem(window.TEMPORARY, _this5.file_size, function (fs) {
-	                    _this5.fs = fs;
-	                    fs.root.getFile((0, _sha256Min2.default)(_this5.url), { create: true }, function (fileEntry) {
-	                        _this5.fileEntry = fileEntry;
-
-	                        fileEntry.createWriter(function (writer) {
-	                            _this5.fileWriter = writer;
-	                            _this5.fileWriter.onerror = function (e) {
-	                                console.error('Write failed: ' + e.toString());
-	                            };
-	                            _this5._download();
-	                        }, function (err) {
-	                            return _this5._fs_error(err);
+	                _this5.fileWriter = new _file2.default((0, _sha256Min2.default)(_this5.url), _this5.file_size);
+	                _this5.fileWriter.on('ready', function () {
+	                    return _this5._download();
+	                });
+	                _this5.fileWriter.on('error', function (e) {
+	                    if (e === 'SECURITY_ERR') {
+	                        _this5.fileWriter = new _fileMemory2.default((0, _sha256Min2.default)(_this5.url), _this5.file_size);
+	                        _this5.fileWriter.on('ready', function () {
+	                            return _this5._download();
 	                        });
-	                    }, function (err) {
-	                        return _this5._fs_error(err);
-	                    });
-	                }, function (err) {
-	                    return _this5._fs_error(err);
+	                        _this5.fileWriter.on('error', function (e) {
+	                            return _this5.emit('error', e);
+	                        });
+	                        return;
+	                    }
+	                    _this5.emit('error', e);
 	                });
 	            });
 	        }
@@ -1186,6 +1159,182 @@ this["FileUploader"] =
 
 	module.exports = function() { throw new Error("define cannot be used indirect"); };
 
+
+/***/ }),
+/* 14 */
+/***/ (function(module, exports, __webpack_require__) {
+
+	'use strict';
+
+	Object.defineProperty(exports, "__esModule", {
+	    value: true
+	});
+
+	var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
+
+	var _tinyEmitter = __webpack_require__(4);
+
+	var _tinyEmitter2 = _interopRequireDefault(_tinyEmitter);
+
+	function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+	function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
+
+	function _possibleConstructorReturn(self, call) { if (!self) { throw new ReferenceError("this hasn't been initialised - super() hasn't been called"); } return call && (typeof call === "object" || typeof call === "function") ? call : self; }
+
+	function _inherits(subClass, superClass) { if (typeof superClass !== "function" && superClass !== null) { throw new TypeError("Super expression must either be null or a function, not " + typeof superClass); } subClass.prototype = Object.create(superClass && superClass.prototype, { constructor: { value: subClass, enumerable: false, writable: true, configurable: true } }); if (superClass) Object.setPrototypeOf ? Object.setPrototypeOf(subClass, superClass) : subClass.__proto__ = superClass; }
+
+	var File = function (_Event) {
+	    _inherits(File, _Event);
+
+	    function File(id, size) {
+	        _classCallCheck(this, File);
+
+	        var _this = _possibleConstructorReturn(this, (File.__proto__ || Object.getPrototypeOf(File)).call(this));
+
+	        var requestFileSystem = window.requestFileSystem || window.webkitRequestFileSystem;
+	        requestFileSystem(window.TEMPORARY, size, function (fs) {
+	            _this.fs = fs;
+	            fs.root.getFile(id, { create: true }, function (fileEntry) {
+	                _this.fileEntry = fileEntry;
+
+	                fileEntry.createWriter(function (writer) {
+	                    _this.fileWriter = writer;
+	                    _this.fileWriter.onwriteend = function (e) {
+	                        _this.emit('wrote', e);
+	                    };
+	                    _this.fileWriter.onerror = function (e) {
+	                        console.error('Write failed: ' + e.toString());
+	                    };
+	                    _this.emit('ready');
+	                }, function (err) {
+	                    return _this._fs_error(err);
+	                });
+	            }, function (err) {
+	                return _this._fs_error(err);
+	            });
+	        }, function (err) {
+	            return _this._fs_error(err);
+	        });
+	        return _this;
+	    }
+
+	    _createClass(File, [{
+	        key: 'write',
+	        value: function write(blob) {
+	            this.fileWriter.write(new Blob([blob]));
+	        }
+	    }, {
+	        key: 'finalize',
+	        value: function finalize(next) {
+	            var _this2 = this;
+
+	            this.fileEntry.file(function (file) {
+	                next(file);
+	            }, function (err) {
+	                return _this2._fs_error(err);
+	            });
+	        }
+	    }, {
+	        key: '_fs_error',
+	        value: function _fs_error(e) {
+	            var msg = '';
+
+	            var FileError = window.FileError || window.DOMException;
+
+	            switch (e.code) {
+	                case FileError.QUOTA_EXCEEDED_ERR:
+	                    msg = 'QUOTA_EXCEEDED_ERR';
+	                    break;
+	                case FileError.NOT_FOUND_ERR:
+	                    msg = 'NOT_FOUND_ERR';
+	                    break;
+	                case FileError.SECURITY_ERR:
+	                    msg = 'SECURITY_ERR';
+	                    break;
+	                case FileError.INVALID_MODIFICATION_ERR:
+	                    msg = 'INVALID_MODIFICATION_ERR';
+	                    break;
+	                case FileError.INVALID_STATE_ERR:
+	                    msg = 'INVALID_STATE_ERR';
+	                    break;
+	                default:
+	                    msg = 'Unknown Error';
+	                    break;
+	            };
+
+	            this.emit('error', msg, e);
+	        }
+	    }]);
+
+	    return File;
+	}(_tinyEmitter2.default);
+
+	exports.default = File;
+
+/***/ }),
+/* 15 */
+/***/ (function(module, exports, __webpack_require__) {
+
+	'use strict';
+
+	Object.defineProperty(exports, "__esModule", {
+	    value: true
+	});
+
+	var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
+
+	var _tinyEmitter = __webpack_require__(4);
+
+	var _tinyEmitter2 = _interopRequireDefault(_tinyEmitter);
+
+	function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+	function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
+
+	function _possibleConstructorReturn(self, call) { if (!self) { throw new ReferenceError("this hasn't been initialised - super() hasn't been called"); } return call && (typeof call === "object" || typeof call === "function") ? call : self; }
+
+	function _inherits(subClass, superClass) { if (typeof superClass !== "function" && superClass !== null) { throw new TypeError("Super expression must either be null or a function, not " + typeof superClass); } subClass.prototype = Object.create(superClass && superClass.prototype, { constructor: { value: subClass, enumerable: false, writable: true, configurable: true } }); if (superClass) Object.setPrototypeOf ? Object.setPrototypeOf(subClass, superClass) : subClass.__proto__ = superClass; }
+
+	var File = function (_Event) {
+	    _inherits(File, _Event);
+
+	    function File(id, size) {
+	        _classCallCheck(this, File);
+
+	        var _this = _possibleConstructorReturn(this, (File.__proto__ || Object.getPrototypeOf(File)).call(this));
+
+	        _this.buffer = new ArrayBuffer(size);
+	        _this.view = new Uint8Array(_this.buffer);
+	        _this.offset = 0;
+	        setTimeout(function () {
+	            return _this.emit('ready');
+	        });
+	        return _this;
+	    }
+
+	    _createClass(File, [{
+	        key: 'write',
+	        value: function write(bytes) {
+	            var _this2 = this;
+
+	            this.view.set(new Uint8Array(bytes), this.offset);
+	            this.offset += bytes.byteLength;
+	            setTimeout(function () {
+	                return _this2.emit('wrote');
+	            });
+	        }
+	    }, {
+	        key: 'finalize',
+	        value: function finalize(next) {
+	            next(new Blob([this.buffer]));
+	        }
+	    }]);
+
+	    return File;
+	}(_tinyEmitter2.default);
+
+	exports.default = File;
 
 /***/ })
 /******/ ]);
